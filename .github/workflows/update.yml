@@ -43,8 +43,13 @@ jobs:
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
           git add assets/maps/today.png data/today.json site/assets/maps/today.png site/data/today.json
-          git diff --staged --quiet || git commit -m "Automated LDI update $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push
+          git diff --staged --quiet && exit 0
+          git commit -m "Automated LDI update $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            echo "Push rejected, retrying ($i)..."
+            sleep $((RANDOM % 5 + 1))
+          done
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -63,6 +68,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   monthly-normals:
+    needs: update-data
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -78,5 +84,10 @@ jobs:
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
           git add assets/maps/monthly site/assets/maps/monthly
-          git diff --staged --quiet || git commit -m "Refresh monthly normals"
-          git push
+          git diff --staged --quiet && exit 0
+          git commit -m "Refresh monthly normals"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            echo "Push rejected, retrying ($i)..."
+            sleep $((RANDOM % 5 + 1))
+          done
