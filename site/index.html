@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>National Lotion Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="agency-bar">
+  <div class="agency-bar-inner">
+    <span>Department of Protected Epidermises</span>
+    <span class="agency-bar-sep">&middot;</span>
+    <span>An Official Website of a Fictional Government</span>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="seal" aria-hidden="true">
+      <svg viewBox="0 0 100 100" width="56" height="56">
+        <circle cx="50" cy="50" r="47" fill="none" stroke="#ffffff" stroke-width="2"/>
+        <circle cx="50" cy="50" r="38" fill="none" stroke="#ffffff" stroke-width="1"/>
+        <path d="M50 20 C 65 30, 65 55, 50 75 C 35 55, 35 30, 50 20 Z" fill="#ffffff" opacity="0.9"/>
+        <circle cx="50" cy="42" r="4" fill="#0b3d64"/>
+      </svg>
+    </div>
+    <div class="masthead-text">
+      <h1>National Lotion Service</h1>
+      <p class="tagline">Weather-Driven Skin Dryness Analysis &amp; Forecasting</p>
+    </div>
+    <nav class="masthead-nav">
+      <a href="#today">Current Conditions</a>
+      <a href="#discussion">Forecast Discussion</a>
+      <a href="#advisories">Advisories</a>
+      <a href="#normals">Climate Normals</a>
+      <a href="#agency">About DOPE</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section id="today" class="product-block">
+    <div class="product-id-line">
+      <span>PRODUCT: NLS-LDI-CONUS-DAILY</span>
+      <span id="issued-line">ISSUED: --</span>
+    </div>
+    <h2 class="section-title">National Lotion Demand Index &mdash; Current Conditions</h2>
+
+    <div class="today-grid">
+      <div class="map-panel">
+        <img id="today-map" src="assets/maps/today.png" alt="Map of current Lotion Demand Index across the continental United States">
+        <p class="map-caption">Interactive map below reflects live-loaded state analysis. Hover any state for details.</p>
+        <svg id="state-svg" viewBox="0 0 800 500" class="state-svg" role="img" aria-label="Interactive state-level Lotion Demand Index map"></svg>
+        <div id="tooltip" class="tooltip hidden"></div>
+      </div>
+
+      <aside class="summary-panel">
+        <div class="summary-card">
+          <div class="summary-label">National Average LDI</div>
+          <div class="summary-value" id="national-ldi">&ndash;</div>
+          <div class="summary-category" id="national-category">Loading&hellip;</div>
+        </div>
+        <table class="scale-table">
+          <tbody>
+            <tr><td class="swatch" style="background:#2b6cb0"></td><td>0&ndash;20</td><td>Properly Hydrated</td></tr>
+            <tr><td class="swatch" style="background:#38a169"></td><td>20&ndash;40</td><td>Mild Moisturizing Recommended</td></tr>
+            <tr><td class="swatch" style="background:#d69e2e"></td><td>40&ndash;60</td><td>Lotion Advised</td></tr>
+            <tr><td class="swatch" style="background:#dd6b20"></td><td>60&ndash;80</td><td>Elbows at Risk</td></tr>
+            <tr><td class="swatch" style="background:#c53030"></td><td>80&ndash;90</td><td>Cocoa Butter Recommended</td></tr>
+            <tr><td class="swatch" style="background:#6b46c1"></td><td>90&ndash;100</td><td>Extreme Ashiness Warning</td></tr>
+          </tbody>
+        </table>
+        <div class="top-states">
+          <div class="top-states-title">Highest Demand Right Now</div>
+          <ol id="top-states-list"><li>Loading&hellip;</li></ol>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="discussion" class="product-block afd">
+    <div class="product-id-line">
+      <span>PRODUCT: NLS-AFD-CONUS</span>
+      <span id="afd-issued-line">ISSUED: --</span>
+    </div>
+    <h2 class="section-title">Area Forecast Discussion</h2>
+    <pre id="afd-text" class="afd-text">Loading discussion&hellip;</pre>
+  </section>
+
+  <section id="advisories" class="product-block">
+    <h2 class="section-title">Current Advisories &amp; Statements</h2>
+    <ul class="advisory-list" id="advisory-list">
+      <li class="advisory-item">Loading&hellip;</li>
+    </ul>
+  </section>
+
+  <section id="normals" class="product-block">
+    <h2 class="section-title">Monthly Climate Normals</h2>
+    <p class="section-sub">1991&ndash;2020 baseline. Select a month to view its normal Lotion Demand Index pattern.</p>
+    <div class="month-tabs" id="month-tabs">
+      <button data-month="today" class="month-tab active">TODAY</button>
+      <button data-month="jan" class="month-tab">JAN</button>
+      <button data-month="feb" class="month-tab">FEB</button>
+      <button data-month="mar" class="month-tab">MAR</button>
+      <button data-month="apr" class="month-tab">APR</button>
+      <button data-month="may" class="month-tab">MAY</button>
+      <button data-month="jun" class="month-tab">JUN</button>
+      <button data-month="jul" class="month-tab">JUL</button>
+      <button data-month="aug" class="month-tab">AUG</button>
+      <button data-month="sep" class="month-tab">SEP</button>
+      <button data-month="oct" class="month-tab">OCT</button>
+      <button data-month="nov" class="month-tab">NOV</button>
+      <button data-month="dec" class="month-tab">DEC</button>
+    </div>
+  </section>
+
+  <section id="agency" class="product-block agency-block">
+    <h2 class="section-title">About the Department of Protected Epidermises</h2>
+    <p>The National Lotion Service is the flagship weather product of the Department of Protected Epidermises (DOPE), a fictional cabinet-level agency dedicated to the earnest, thorough, and entirely unnecessary monitoring of American skin.</p>
+    <div class="org-chart">
+      <div class="org-node org-root">Department of Protected Epidermises (DOPE)</div>
+      <div class="org-children">
+        <div class="org-branch">
+          <div class="org-node org-agency">National Lotion Service (NLS)</div>
+          <ul class="org-products">
+            <li>Current Lotion Demand Index</li>
+            <li>7-Day Moisture Outlook</li>
+            <li>Monthly Climate Normals</li>
+            <li>Forecast Discussions</li>
+          </ul>
+        </div>
+        <div class="org-branch">
+          <div class="org-node org-agency">Bureau of Lip Protection</div>
+          <ul class="org-products">
+            <li>National Chapstick Index</li>
+            <li>Winter Lip Hazard Outlook</li>
+          </ul>
+        </div>
+        <div class="org-branch">
+          <div class="org-node org-agency">Office of Cuticle Preparedness</div>
+          <ul class="org-products">
+            <li>Weekly Hand Care Bulletin</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p class="disclaimer">Disclaimer: The National Lotion Service is a fictional agency. This index is a humorous visualization based on real environmental data and is not intended as medical advice.</p>
+  <p class="footer-meta">Data sourced from NASA POWER, USGS, and Census TIGER. Updated automatically every 6 hours.</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
