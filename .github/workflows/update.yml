@@ -1,0 +1,82 @@
+name: Update Lotion Demand Index
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch: {}       # allow manual trigger from the Actions tab
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install numpy scipy matplotlib requests
+
+      - name: Run today's pipeline
+        working-directory: scripts
+        run: python run_pipeline.py today
+
+      - name: Sync generated assets into site/
+        run: |
+          cp -r assets/maps/today.png site/assets/maps/today.png
+          cp -r data/today.json site/data/today.json
+
+      - name: Commit updated products
+        run: |
+          git config user.name "nls-bot"
+          git config user.email "actions@github.com"
+          git add assets/maps/today.png data/today.json site/assets/maps/today.png site/data/today.json
+          git diff --staged --quiet || git commit -m "Automated LDI update $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: update-data
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  monthly-normals:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy scipy matplotlib requests
+      - working-directory: scripts
+        run: python run_pipeline.py monthly
+      - run: cp -r assets/maps/monthly/* site/assets/maps/monthly/
+      - run: |
+          git config user.name "nls-bot"
+          git config user.email "actions@github.com"
+          git add assets/maps/monthly site/assets/maps/monthly
+          git diff --staged --quiet || git commit -m "Refresh monthly normals"
+          git push
