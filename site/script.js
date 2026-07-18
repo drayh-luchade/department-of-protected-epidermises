@@ -1,9 +1,9 @@
 const LDI_COLORS = [
-  { max: 20, color: "#2b6cb0", label: "Properly Hydrated" },
-  { max: 40, color: "#38a169", label: "Mild Moisturizing Recommended" },
-  { max: 60, color: "#d69e2e", label: "Lotion Advised" },
-  { max: 80, color: "#dd6b20", label: "Elbows at Risk" },
-  { max: 90, color: "#c53030", label: "Cocoa Butter Recommended" },
+  { max: 20, color: "#4a6fa5", label: "Properly Hydrated" },
+  { max: 40, color: "#7fc6a4", label: "Mild Moisturizing Recommended" },
+  { max: 60, color: "#b9c99a", label: "Lotion Advised" },
+  { max: 80, color: "#e8dcc0", label: "Elbows at Risk" },
+  { max: 90, color: "#8b8fce", label: "Cocoa Butter Recommended" },
   { max: 101, color: "#6b46c1", label: "Extreme Ashiness Warning" },
 ];
 
