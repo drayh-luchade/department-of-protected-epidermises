@@ -1,0 +1,1 @@
+[{"date": "2026-07-15", "offset": -3, "label": "T-3"}, {"date": "2026-07-16", "offset": -2, "label": "T-2"}, {"date": "2026-07-17", "offset": -1, "label": "T-1"}, {"date": "2026-07-18", "offset": 0, "label": "TODAY"}, {"date": "2026-07-19", "offset": 1, "label": "T+1"}, {"date": "2026-07-20", "offset": 2, "label": "T+2"}, {"date": "2026-07-21", "offset": 3, "label": "T+3"}]
