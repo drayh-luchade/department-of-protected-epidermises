@@ -27,24 +27,31 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install numpy scipy matplotlib requests
+        run: pip install -r requirements.txt
 
-      - name: Run today's pipeline
+      - name: Run the 7-day timeline pipeline (T-3..T+3)
         working-directory: scripts
-        run: python run_pipeline.py today
+        run: python run_pipeline.py timeline
 
       - name: Sync generated assets into site/
         run: |
-          cp -r assets/maps/today.png site/assets/maps/today.png
-          cp -r data/today.json site/data/today.json
+          mkdir -p site/assets/maps/timeline site/data/timeline
+          cp -r assets/maps/timeline/. site/assets/maps/timeline/
+          cp -r data/timeline/. site/data/timeline/
+          cp data/timeline_index.json site/data/timeline_index.json
+          cp assets/maps/today.png site/assets/maps/today.png
+          cp data/today.json site/data/today.json
 
       - name: Commit updated products
         run: |
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
-          git add assets/maps/today.png data/today.json site/assets/maps/today.png site/data/today.json
+          git add assets/maps/timeline data/timeline data/timeline_index.json \
+                   assets/maps/today.png data/today.json \
+                   site/assets/maps/timeline site/data/timeline site/data/timeline_index.json \
+                   site/assets/maps/today.png site/data/today.json
           git diff --staged --quiet && exit 0
-          git commit -m "Automated LDI update $(date -u +%Y-%m-%dT%H:%MZ)"
+          git commit -m "Automated LDI timeline update $(date -u +%Y-%m-%dT%H:%MZ)"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push && break
             echo "Push rejected, retrying ($i)..."
@@ -68,6 +75,10 @@ jobs:
         uses: actions/deploy-pages@v4
 
   monthly-normals:
+    # Runs far less often than the daily timeline -- monthly normals are
+    # meant to be 30-year climatology and don't need refreshing every 6
+    # hours. Trigger manually until a real climate-normals data source
+    # (PRISM) replaces the demo path -- see README "Going live" section.
     needs: update-data
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -76,10 +87,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install numpy scipy matplotlib requests
+      - run: pip install -r requirements.txt
       - working-directory: scripts
         run: python run_pipeline.py monthly
-      - run: cp -r assets/maps/monthly/* site/assets/maps/monthly/
+      - run: |
+          mkdir -p site/assets/maps/monthly
+          cp -r assets/maps/monthly/. site/assets/maps/monthly/
       - run: |
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
