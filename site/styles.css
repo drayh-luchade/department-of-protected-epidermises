@@ -9,11 +9,11 @@
   --mono: 'Roboto Mono', ui-monospace, monospace;
   --sans: 'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --c-hydrated: #2b6cb0;
-  --c-mild: #38a169;
-  --c-advised: #d69e2e;
-  --c-risk: #dd6b20;
-  --c-cocoa: #c53030;
+  --c-hydrated: #4a6fa5;
+  --c-mild: #7fc6a4;
+  --c-advised: #b9c99a;
+  --c-risk: #e8dcc0;
+  --c-cocoa: #8b8fce;
   --c-extreme: #6b46c1;
 }
 
@@ -153,6 +153,26 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 .county-path:hover { opacity: 0.75; }
 .state-outline { fill: none; stroke: #2d2d2d; stroke-width: 0.9; pointer-events: none; vector-effect: non-scaling-stroke; }
 
+.inset-maps { display: flex; gap: 16px; margin-top: 10px; }
+.inset-map-box { flex: 1; text-align: center; }
+.inset-map-label {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  letter-spacing: 0.02em;
+}
+.inset-svg {
+  width: 100%;
+  height: 140px;
+  border: 1px solid var(--line);
+  background: #eef1ee;
+  border-radius: 2px;
+}
+.inset-county-path { stroke: #ffffff; stroke-width: 0.4; cursor: pointer; vector-effect: non-scaling-stroke; }
+.inset-county-path:hover { opacity: 0.75; }
+
 .tooltip {
   position: absolute;
   background: var(--navy-dark);
@@ -180,9 +200,24 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 .summary-value { font-family: var(--mono); font-size: 2.6rem; font-weight: 700; margin: 4px 0; }
 .summary-category { font-size: 0.95rem; font-weight: 600; }
 
-.scale-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.scale-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
-.scale-table .swatch { width: 18px; height: 18px; border-radius: 2px; padding: 0; }
+.scale-legend { display: flex; gap: 14px; margin: 0 0 4px; height: 220px; }
+.scale-gradient-bar {
+  width: 22px;
+  border-radius: 3px;
+  background: linear-gradient(to top,
+    var(--c-hydrated) 0%, var(--c-mild) 20%, var(--c-advised) 40%,
+    var(--c-risk) 60%, var(--c-cocoa) 80%, var(--c-extreme) 100%);
+}
+.scale-legend-labels { position: relative; flex: 1; list-style: none; margin: 0; padding: 0; height: 100%; }
+.scale-legend-labels li {
+  position: absolute;
+  left: 0;
+  transform: translateY(50%);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  line-height: 1.1;
+}
 
 .top-states-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
 #top-states-list { margin: 0; padding-left: 20px; font-size: 0.85rem; }

@@ -1,14 +1,30 @@
-const LDI_COLORS = [
-  { max: 20, color: "#4a6fa5", label: "Properly Hydrated" },
-  { max: 40, color: "#7fc6a4", label: "Mild Moisturizing Recommended" },
-  { max: 60, color: "#b9c99a", label: "Lotion Advised" },
-  { max: 80, color: "#e8dcc0", label: "Elbows at Risk" },
-  { max: 90, color: "#8b8fce", label: "Cocoa Butter Recommended" },
-  { max: 101, color: "#6b46c1", label: "Extreme Ashiness Warning" },
-];
+// Same 6 stops as LDI_COLORS in make_map.py, evenly spaced across 0-100 --
+// matplotlib's LinearSegmentedColormap.from_list spaces a flat color list
+// evenly by default, so this mirrors that rather than the 0/20/40/60/80/90/100
+// legend boundaries (those are label positions only, not color-transition
+// points -- see the scale legend in index.html).
+const LDI_GRADIENT_STOPS = ["#4a6fa5", "#7fc6a4", "#b9c99a", "#e8dcc0", "#8b8fce", "#6b46c1"];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex([r, g, b]) {
+  return "#" + [r, g, b]
+    .map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0"))
+    .join("");
+}
 
 function colorFor(ldi) {
-  return (LDI_COLORS.find(b => ldi < b.max) || LDI_COLORS[LDI_COLORS.length - 1]).color;
+  const v = Math.max(0, Math.min(100, ldi));
+  const nSeg = LDI_GRADIENT_STOPS.length - 1;
+  const scaled = (v / 100) * nSeg;
+  const i = Math.min(nSeg - 1, Math.floor(scaled));
+  const t = scaled - i;
+  const c0 = hexToRgb(LDI_GRADIENT_STOPS[i]);
+  const c1 = hexToRgb(LDI_GRADIENT_STOPS[i + 1]);
+  return rgbToHex([0, 1, 2].map(k => c0[k] + (c1[k] - c0[k]) * t));
 }
 
 // Equirectangular projection matched to the CONUS bbox used in the Python
@@ -24,11 +40,50 @@ function project([lon, lat]) {
   return [x, y];
 }
 
-function ringsToPathD(polys) {
+// Alaska/Hawaii inset maps: bbox and padding match regions.py's REGIONS
+// and REGION_PAD_DEG exactly. These are hover-only, non-zoomable, so each
+// gets its own small SVG with a viewBox sized to preserve true aspect
+// ratio (cos(mean_lat) correction), the same fix make_map.py's
+// _render_region uses for the static PNG insets -- otherwise Alaska
+// would look squashed/stretched at high latitude.
+const INSET_REGIONS = {
+  alaska: {
+    bbox: { lat_min: 51.0, lat_max: 71.5, lon_min: -170.0, lon_max: -130.0 },
+    padDeg: 0.6,
+    stateFips: "02",
+    stateName: "Alaska",
+  },
+  hawaii: {
+    bbox: { lat_min: 18.5, lat_max: 22.5, lon_min: -160.5, lon_max: -154.5 },
+    padDeg: 0.3,
+    stateFips: "15",
+    stateName: "Hawaii",
+  },
+};
+
+function makeInsetProjection(bbox, padDeg) {
+  const meanLatRad = ((bbox.lat_min + bbox.lat_max) / 2) * Math.PI / 180;
+  const cosLat = Math.cos(meanLatRad);
+  const lonMin = bbox.lon_min - padDeg;
+  const latMin = bbox.lat_min - padDeg;
+  const width = (bbox.lon_max - bbox.lon_min + 2 * padDeg) * cosLat;
+  const height = bbox.lat_max - bbox.lat_min + 2 * padDeg;
+  return {
+    width,
+    height,
+    project([lon, lat]) {
+      const x = (lon - lonMin) * cosLat;
+      const y = height - (lat - latMin); // flip so north is up
+      return [x, y];
+    },
+  };
+}
+
+function ringsToPathD(polys, projector) {
   let d = "";
   for (const poly of polys) {
     for (const ring of poly) {
-      d += ring.map((pt, i) => `${i === 0 ? "M" : "L"}${project(pt).join(",")}`).join(" ") + " Z ";
+      d += ring.map((pt, i) => `${i === 0 ? "M" : "L"}${projector(pt).join(",")}`).join(" ") + " Z ";
     }
   }
   return d;
@@ -127,7 +182,7 @@ function buildCountyMap(countiesGeo, statesGeo, dayData) {
     const polys = geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
 
     const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", ringsToPathD(polys));
+    path.setAttribute("d", ringsToPathD(polys, project));
     path.setAttribute("fill", fill);
     path.setAttribute("class", "county-path");
     g.appendChild(path);
@@ -154,12 +209,77 @@ function buildCountyMap(countiesGeo, statesGeo, dayData) {
     const geom = feature.geometry;
     const polys = geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
     const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", ringsToPathD(polys));
+    path.setAttribute("d", ringsToPathD(polys, project));
     path.setAttribute("class", "state-outline");
     g.appendChild(path);
   });
 
   applyZoomTransform();
+}
+
+// Alaska/Hawaii: hover-only county detail, no zoom/pan (their bboxes are
+// small enough that panning/zooming doesn't add value the way it does for
+// CONUS). Reuses the same #tooltip element as the main map.
+function buildInsetMap(regionKey, svgId, countiesGeo, statesGeo, dayData) {
+  const svg = document.getElementById(svgId);
+  const tooltip = document.getElementById("tooltip");
+  const ns = "http://www.w3.org/2000/svg";
+  if (!svg) return;
+
+  const cfg = INSET_REGIONS[regionKey];
+  const proj = makeInsetProjection(cfg.bbox, cfg.padDeg);
+  svg.setAttribute("viewBox", `0 0 ${proj.width.toFixed(2)} ${proj.height.toFixed(2)}`);
+
+  svg.innerHTML = "";
+  const g = document.createElementNS(ns, "g");
+  svg.appendChild(g);
+
+  const countyData = dayData.counties || {};
+
+  countiesGeo.features.forEach(feature => {
+    const props = feature.properties;
+    if (props.STATE !== cfg.stateFips) return;
+    const fips = (props.GEO_ID || "").slice(-5) || (props.STATE + props.COUNTY);
+    const info = countyData[fips];
+    const fill = info ? colorFor(info.ldi) : "#dddddd";
+
+    const geom = feature.geometry;
+    const polys = geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", ringsToPathD(polys, proj.project));
+    path.setAttribute("fill", fill);
+    path.setAttribute("class", "county-path inset-county-path");
+    g.appendChild(path);
+
+    path.addEventListener("mousemove", (e) => {
+      if (!info) return;
+      tooltip.classList.remove("hidden");
+      tooltip.innerHTML = `<strong>${info.name} County, ${info.state}</strong><br>` +
+        `LDI: ${info.ldi} (${info.category})<br>` +
+        `Humidity: ${info.humidity_pct}%<br>` +
+        `Wind: ${info.wind_mph} mph<br>` +
+        `Elevation: ${info.elevation_m} m`;
+      const rect = svg.closest(".map-panel")?.getBoundingClientRect() || svg.getBoundingClientRect();
+      tooltip.style.left = (e.clientX - rect.left + 12) + "px";
+      tooltip.style.top = (e.clientY - rect.top + 12) + "px";
+    });
+    path.addEventListener("mouseleave", () => tooltip.classList.add("hidden"));
+  });
+
+  statesGeo.features.forEach(feature => {
+    if (feature.properties.name !== cfg.stateName) return;
+    const geom = feature.geometry;
+    const polys = geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", ringsToPathD(polys, proj.project));
+    path.setAttribute("class", "state-outline");
+    g.appendChild(path);
+  });
+}
+
+function buildInsetMaps(countiesGeo, statesGeo, dayData) {
+  buildInsetMap("alaska", "alaska-svg", countiesGeo, statesGeo, dayData);
+  buildInsetMap("hawaii", "hawaii-svg", countiesGeo, statesGeo, dayData);
 }
 
 function populateSummary(data) {
@@ -259,6 +379,7 @@ async function selectDay(entry) {
     if (!statesGeoCache) statesGeoCache = await loadJSON("assets/us-states.json");
     if (!countiesGeoCache) countiesGeoCache = await loadJSON("assets/us-counties.json");
     buildCountyMap(countiesGeoCache, statesGeoCache, dayData);
+    buildInsetMaps(countiesGeoCache, statesGeoCache, dayData);
     buildDiscussion(dayData, sorted, entry);
     buildAdvisories(sorted);
   } catch (err) {
@@ -289,6 +410,7 @@ async function setupDayTabs() {
       statesGeoCache = await loadJSON("assets/us-states.json");
       countiesGeoCache = await loadJSON("assets/us-counties.json");
       buildCountyMap(countiesGeoCache, statesGeoCache, dayData);
+      buildInsetMaps(countiesGeoCache, statesGeoCache, dayData);
       buildDiscussion(dayData, sorted, { date: dayData.date, offset: 0 });
       buildAdvisories(sorted);
     } catch (err2) {
