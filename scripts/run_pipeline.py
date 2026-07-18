@@ -12,8 +12,9 @@ run_pipeline.py
                                           compatibility with the rest of the
                                           site.
     python run_pipeline.py monthly    -> the 12 assets/maps/monthly/*.png
-                                          climate-normal products (unchanged
-                                          from before; still single-day-per-
+                                          climate-normal products, now
+                                          rendering CONUS + Alaska + Hawaii
+                                          insets (still single-day-per-
                                           month demo data, see README).
 
 Live path: fetch_open_meteo.py, tried first for each region. Falls back
@@ -104,15 +105,24 @@ def run_timeline():
 
 
 def run_monthly():
-    conus = REGIONS["conus"]
     for month in range(1, 13):
         seed = month * 17
         rep_date = dt.date(2026, month, 15)
-        grid = make_demo_grid(conus["bbox"], conus["spacing"], date=rep_date, seed=seed)
-        result = compute_ldi(grid)
-        result["raw_vars"] = grid["vars"]
         month_name = calendar.month_abbr[month].lower()
-        render_map({"conus": result}, STATES_GEOJSON, COUNTIES_GEOJSON,
+
+        ldi_results = {}
+        for region_key, cfg in REGIONS.items():
+            # Same seed per month across regions (not offset per-region) so
+            # the demo data stays internally consistent with the rest of
+            # the pipeline's per-region generation elsewhere -- differences
+            # in output come from each region's own bbox/spacing, not from
+            # deliberately varying the seed.
+            grid = make_demo_grid(cfg["bbox"], cfg["spacing"], date=rep_date, seed=seed)
+            result = compute_ldi(grid)
+            result["raw_vars"] = grid["vars"]
+            ldi_results[region_key] = result
+
+        render_map(ldi_results, STATES_GEOJSON, COUNTIES_GEOJSON,
                    f"../assets/maps/monthly/{month_name}.png",
                    product_id=f"NLS-LDI-CONUS-NORMAL-{calendar.month_abbr[month].upper()}",
                    label=f"{calendar.month_name[month]} Climate Normal (1991-2020) — Lotion Demand Index")
