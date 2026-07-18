@@ -114,13 +114,13 @@ def render_map(ldi_results: dict, states_geojson: str, counties_geojson: str, ou
     _render_region(main_ax, conus_result, states_geojson, all_counties, "conus", cmap, norm)
 
     if "alaska" in ldi_results and ldi_results["alaska"] is not None:
-        ak_ax = fig.add_axes([0.045, 0.135, 0.36, 0.17])
+        ak_ax = fig.add_axes(REGIONS["alaska"]["inset_rect"])
         _render_region(ak_ax, ldi_results["alaska"], states_geojson, all_counties, "alaska", cmap, norm)
         ak_ax.text(0.02, 1.04, "ALASKA", transform=ak_ax.transAxes, fontsize=8,
                    family="monospace", color="#333", fontweight="bold", va="bottom")
 
     if "hawaii" in ldi_results and ldi_results["hawaii"] is not None:
-        hi_ax = fig.add_axes([0.43, 0.135, 0.22, 0.17])
+        hi_ax = fig.add_axes(REGIONS["hawaii"]["inset_rect"])
         _render_region(hi_ax, ldi_results["hawaii"], states_geojson, all_counties, "hawaii", cmap, norm)
         hi_ax.text(0.02, 1.04, "HAWAII", transform=hi_ax.transAxes, fontsize=8,
                    family="monospace", color="#333", fontweight="bold", va="bottom")

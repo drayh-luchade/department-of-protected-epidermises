@@ -23,17 +23,23 @@ REGIONS = {
         "spacing": 4.0,
         "exclude_state_names": set(),
         "only_state_names": {"Alaska"},
-        # inset placement as fraction of the figure, matplotlib add_axes coords.
-        # Same footprint as Hawaii's box below -- true shape is preserved by
-        # computing a real aspect ratio in make_map.py rather than stretching
-        # to fill the box, so this is a bounding box, not a target shape.
-        "inset_rect": [0.045, 0.13, 0.34, 0.19],
+        # inset placement as fraction of the figure, matplotlib add_axes coords:
+        # [left, bottom, width, height]. This is a bounding box, not a target
+        # shape -- true shape is preserved by computing a real aspect ratio
+        # in make_map.py rather than stretching to fill the box, so Alaska
+        # will letterbox within this box if its shape doesn't match Alaska's
+        # true ~0.84 width/height ratio.
+        # `render_map` in make_map.py reads this dict directly, so editing
+        # these numbers is now sufficient to resize/reposition the inset.
+        "inset_rect": [0.045, 0.10, 0.40, 0.24],
     },
     "hawaii": {
         "bbox": dict(lat_min=18.5, lat_max=22.5, lon_min=-160.5, lon_max=-154.5),
         "spacing": 1.0,
         "exclude_state_names": set(),
         "only_state_names": {"Hawaii"},
-        "inset_rect": [0.40, 0.13, 0.34, 0.19],
+        # left shifted from 0.40 -> 0.47 so it clears Alaska's wider box
+        # (Alaska's box now spans left=0.045 to left+width=0.445).
+        "inset_rect": [0.47, 0.10, 0.22, 0.17],
     },
 }
