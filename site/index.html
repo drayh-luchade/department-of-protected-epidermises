@@ -21,7 +21,7 @@
 <header class="masthead">
   <div class="masthead-inner">
     <div class="seal" aria-hidden="true">
-      <img src="assets/logo.png" alt="" width="56" height="56">
+      <img src="assets/logo.png" alt="" width="196" height="196">
     </div>
     <div class="masthead-text">
       <h1>National Lotion Service</h1>
@@ -68,7 +68,10 @@
       </p>
     </div>
 
-    <div class="day-tabs" id="day-tabs"></div>
+    <div class="day-slider-wrap">
+      <input type="range" id="day-slider" class="day-slider" min="0" max="0" step="1" value="0" aria-label="Select day">
+      <div class="day-slider-labels" id="day-slider-labels"></div>
+    </div>
     <div class="day-tabs hour-tabs" id="hour-tabs"></div>
 
     <div class="today-grid">

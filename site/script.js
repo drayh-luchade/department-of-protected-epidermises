@@ -371,6 +371,7 @@ function buildAdvisories(sortedEntries) {
 }
 
 let timelineIndex = [];
+let days = [];
 let currentDate = null;
 let currentHour = null;
 
@@ -378,8 +379,11 @@ async function selectEntry(entry) {
   currentDate = entry.date;
   currentHour = entry.hour;
 
-  document.querySelectorAll("#day-tabs .day-tab").forEach(t => {
-    t.classList.toggle("active", t.dataset.date === entry.date);
+  const dayIndex = days.findIndex(d => d.date === entry.date);
+  const slider = document.getElementById("day-slider");
+  if (slider && dayIndex !== -1) slider.value = dayIndex;
+  document.querySelectorAll("#day-slider-labels span").forEach(s => {
+    s.classList.toggle("active", s.dataset.date === entry.date);
   });
   document.querySelectorAll("#hour-tabs .day-tab").forEach(t => {
     t.classList.toggle("active", Number(t.dataset.hour) === entry.hour);
@@ -409,26 +413,33 @@ function findEntry(date, hour) {
 }
 
 async function setupDayTabs() {
-  const dayContainer = document.getElementById("day-tabs");
+  const slider = document.getElementById("day-slider");
+  const sliderLabels = document.getElementById("day-slider-labels");
   const hourContainer = document.getElementById("hour-tabs");
   try {
     timelineIndex = await loadJSON("data/timeline_index.json");
 
-    // One button per unique day, in chronological order (4 hour-entries share a day)
-    const days = [];
+    // One entry per unique day, in chronological order (4 hour-entries share a day)
+    days = [];
     for (const e of timelineIndex) {
       if (!days.find(d => d.date === e.date)) {
         days.push({ date: e.date, label: e.day_label, forecast: e.offset_days > 0 });
       }
     }
-    dayContainer.innerHTML = days.map(d =>
-      `<button class="day-tab ${d.forecast ? "forecast" : ""}" data-date="${d.date}">${d.label}</button>`
+
+    slider.min = 0;
+    slider.max = days.length - 1;
+    slider.step = 1;
+
+    sliderLabels.innerHTML = days.map(d =>
+      `<span class="${d.forecast ? "forecast" : ""}" data-date="${d.date}">${d.label}</span>`
     ).join("");
-    dayContainer.querySelectorAll(".day-tab").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const entry = findEntry(btn.dataset.date, currentHour) || timelineIndex.find(e => e.date === btn.dataset.date);
-        if (entry) selectEntry(entry);
-      });
+
+    slider.addEventListener("input", () => {
+      const day = days[Number(slider.value)];
+      if (!day) return;
+      const entry = findEntry(day.date, currentHour) || timelineIndex.find(e => e.date === day.date);
+      if (entry) selectEntry(entry);
     });
 
     // Hour buttons are the same 4 slots every day
@@ -447,7 +458,7 @@ async function setupDayTabs() {
     if (nowEntry) await selectEntry(nowEntry);
   } catch (err) {
     console.error("Could not load timeline index, falling back to today.json", err);
-    dayContainer.innerHTML = "";
+    document.querySelector(".day-slider-wrap").style.display = "none";
     hourContainer.innerHTML = "";
     try {
       const dayData = await loadJSON("data/today.json");
