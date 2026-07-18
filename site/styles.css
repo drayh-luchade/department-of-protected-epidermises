@@ -272,6 +272,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 }
 .day-tab.active, .day-tab:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
 .day-tab.forecast.active { background: #38686f; border-color: #38686f; }
+.hour-tabs { margin-top: -6px; margin-bottom: 16px; }
+.hour-tabs .day-tab { padding: 4px 12px; font-size: 0.7rem; opacity: 0.9; }
 
 #normal-map { width: 100%; border: 1px solid var(--line); border-radius: 2px; display: block; }
 

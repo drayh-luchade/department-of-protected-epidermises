@@ -295,16 +295,18 @@ function populateSummary(data) {
   return entries;
 }
 
-function buildDiscussion(data, sortedEntries, dayMeta) {
+function buildDiscussion(data, sortedEntries, entryMeta) {
   const dry = sortedEntries.slice(0, 5).map(e => e[0]);
   const moist = sortedEntries.slice(-5).map(e => e[0]).reverse();
   const avg = data.national_average.toFixed(1);
   const issued = fmtIssued(data.issued_utc);
-  const periodLine = dayMeta.offset === 0
-    ? "THIS ANALYSIS REPRESENTS CURRENT CONDITIONS."
-    : dayMeta.offset > 0
-      ? `THIS IS A MODEL-BASED OUTLOOK FOR ${dayMeta.date}, ${dayMeta.offset} DAY(S) AHEAD. FORECAST CONFIDENCE DECREASES WITH LEAD TIME.`
-      : `THIS IS AN ARCHIVED ANALYSIS FOR ${dayMeta.date}, ${Math.abs(dayMeta.offset)} DAY(S) IN THE PAST.`;
+  const offset = entryMeta.offset_days;
+  const hourLabel = entryMeta.hour_label || "";
+  const periodLine = offset === 0
+    ? `THIS ANALYSIS REPRESENTS CONDITIONS AT ${hourLabel} ON ${entryMeta.date}.`
+    : offset > 0
+      ? `THIS IS A MODEL-BASED OUTLOOK FOR ${entryMeta.date} ${hourLabel}, ${offset} DAY(S) AHEAD. FORECAST CONFIDENCE DECREASES WITH LEAD TIME.`
+      : `THIS IS AN ARCHIVED ANALYSIS FOR ${entryMeta.date} ${hourLabel}, ${Math.abs(offset)} DAY(S) IN THE PAST.`;
 
   const text =
 `NLS AREA FORECAST DISCUSSION
@@ -313,7 +315,7 @@ ${issued}
 
 .SYNOPSIS...
 NATIONAL MEAN LOTION DEMAND INDEX AT ${avg} (${data.national_category.toUpperCase()})
-FOR ${dayMeta.date}. ${periodLine}
+FOR ${entryMeta.date} ${hourLabel}. ${periodLine}
 
 .AREAS OF CONCERN...
 HIGHEST DEMAND ANALYZED OVER ${dry.join(", ").toUpperCase()}. RESIDENTS
@@ -328,8 +330,9 @@ FUNCTION WITHOUT SUPPLEMENTAL INTERVENTION.
 
 .OUTLOOK...
 COUNTY-LEVEL DETAIL IS AVAILABLE ON THE MAP ABOVE -- SCROLL TO ZOOM,
-DRAG TO PAN, DOUBLE-CLICK TO RESET. SEE THE 7-DAY TAB SELECTOR FOR
-ARCHIVED ANALYSES (T-3..T-1) AND THE MODEL-BASED OUTLOOK (T+1..T+3).
+DRAG TO PAN, DOUBLE-CLICK TO RESET. USE THE DAY SELECTOR (T-3..T+3) AND
+HOUR SELECTOR (00Z/06Z/12Z/18Z) ABOVE FOR ARCHIVED ANALYSES AND THE
+MODEL-BASED OUTLOOK, EACH AT THE SAME 6-HOUR RESOLUTION.
 
 $$
 NLS FORECAST DESK`;
@@ -367,14 +370,26 @@ function buildAdvisories(sortedEntries) {
   ).join("");
 }
 
-async function selectDay(entry) {
-  document.querySelectorAll(".day-tab").forEach(t => {
+let timelineIndex = [];
+let currentDate = null;
+let currentHour = null;
+
+async function selectEntry(entry) {
+  currentDate = entry.date;
+  currentHour = entry.hour;
+
+  document.querySelectorAll("#day-tabs .day-tab").forEach(t => {
     t.classList.toggle("active", t.dataset.date === entry.date);
   });
-  document.getElementById("today-map").src = `assets/maps/timeline/${entry.date}.png`;
+  document.querySelectorAll("#hour-tabs .day-tab").forEach(t => {
+    t.classList.toggle("active", Number(t.dataset.hour) === entry.hour);
+  });
+  document.getElementById("today-map").src = `assets/maps/timeline/${entry.file_base}.png`;
+  document.querySelector(".product-id-line span").textContent =
+    `PRODUCT: NLS-LDI-CONUS-${entry.offset_days > 0 ? "FCST" : entry.offset_days < 0 ? "ARCH" : "DAILY"}-${entry.hour_label}`;
 
   try {
-    const dayData = await loadJSON(`data/timeline/${entry.date}.json`);
+    const dayData = await loadJSON(`data/timeline/${entry.file_base}.json`);
     const sorted = populateSummary(dayData);
     if (!statesGeoCache) statesGeoCache = await loadJSON("assets/us-states.json");
     if (!countiesGeoCache) countiesGeoCache = await loadJSON("assets/us-counties.json");
@@ -385,25 +400,55 @@ async function selectDay(entry) {
   } catch (err) {
     console.error(err);
     document.getElementById("afd-text").textContent =
-      "Discussion unavailable: could not load data for " + entry.date + " (" + err.message + ").";
+      "Discussion unavailable: could not load data for " + entry.timestamp + " (" + err.message + ").";
   }
 }
 
+function findEntry(date, hour) {
+  return timelineIndex.find(e => e.date === date && e.hour === hour);
+}
+
 async function setupDayTabs() {
-  const container = document.getElementById("day-tabs");
+  const dayContainer = document.getElementById("day-tabs");
+  const hourContainer = document.getElementById("hour-tabs");
   try {
-    const index = await loadJSON("data/timeline_index.json");
-    container.innerHTML = index.map(e =>
-      `<button class="day-tab ${e.offset > 0 ? "forecast" : ""}" data-date="${e.date}">${e.label}</button>`
+    timelineIndex = await loadJSON("data/timeline_index.json");
+
+    // One button per unique day, in chronological order (4 hour-entries share a day)
+    const days = [];
+    for (const e of timelineIndex) {
+      if (!days.find(d => d.date === e.date)) {
+        days.push({ date: e.date, label: e.day_label, forecast: e.offset_days > 0 });
+      }
+    }
+    dayContainer.innerHTML = days.map(d =>
+      `<button class="day-tab ${d.forecast ? "forecast" : ""}" data-date="${d.date}">${d.label}</button>`
     ).join("");
-    container.querySelectorAll(".day-tab").forEach((btn, i) => {
-      btn.addEventListener("click", () => selectDay(index[i]));
+    dayContainer.querySelectorAll(".day-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const entry = findEntry(btn.dataset.date, currentHour) || timelineIndex.find(e => e.date === btn.dataset.date);
+        if (entry) selectEntry(entry);
+      });
     });
-    const todayEntry = index.find(e => e.offset === 0) || index[Math.floor(index.length / 2)];
-    if (todayEntry) await selectDay(todayEntry);
+
+    // Hour buttons are the same 4 slots every day
+    const hours = [...new Set(timelineIndex.map(e => e.hour))].sort((a, b) => a - b);
+    hourContainer.innerHTML = hours.map(h =>
+      `<button class="day-tab" data-hour="${h}">${String(h).padStart(2, "0")}Z</button>`
+    ).join("");
+    hourContainer.querySelectorAll(".day-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const entry = findEntry(currentDate, Number(btn.dataset.hour));
+        if (entry) selectEntry(entry);
+      });
+    });
+
+    const nowEntry = timelineIndex.find(e => e.is_now) || timelineIndex[Math.floor(timelineIndex.length / 2)];
+    if (nowEntry) await selectEntry(nowEntry);
   } catch (err) {
     console.error("Could not load timeline index, falling back to today.json", err);
-    container.innerHTML = "";
+    dayContainer.innerHTML = "";
+    hourContainer.innerHTML = "";
     try {
       const dayData = await loadJSON("data/today.json");
       const sorted = populateSummary(dayData);
@@ -411,7 +456,7 @@ async function setupDayTabs() {
       countiesGeoCache = await loadJSON("assets/us-counties.json");
       buildCountyMap(countiesGeoCache, statesGeoCache, dayData);
       buildInsetMaps(countiesGeoCache, statesGeoCache, dayData);
-      buildDiscussion(dayData, sorted, { date: dayData.date, offset: 0 });
+      buildDiscussion(dayData, sorted, { date: dayData.date, offset_days: 0, hour_label: "" });
       buildAdvisories(sorted);
     } catch (err2) {
       document.getElementById("afd-text").textContent = "Discussion unavailable: " + err2.message;
