@@ -108,29 +108,24 @@ def render_map(ldi_results: dict, states_geojson: str, counties_geojson: str, ou
     all_counties = load_counties(counties_geojson)
 
     cmap = LinearSegmentedColormap.from_list("ldi", LDI_COLORS, N=256)
-    # Colorbar/legend stays a smooth continuous gradient (256 equal bins).
-    legend_norm = BoundaryNorm(np.linspace(0, 100, 257), cmap.N)
-    # County fill is discretized into LDI_BOUNDS' bands (0/20/40/60/80/90/100)
-    # -- a handful of solid colors per region instead of a smooth blend,
-    # so the map reads as banded while the legend stays smooth.
-    map_norm = BoundaryNorm(LDI_BOUNDS, cmap.N)
+    norm = BoundaryNorm(np.linspace(0, 100, 257), cmap.N)
 
     fig = plt.figure(figsize=(11, 8.2), facecolor="#f5f6f3")
 
     # Main CONUS map takes the upper ~56% of the figure; insets and footer
     # text live in the reserved band below it, side by side, with margin.
     main_ax = fig.add_axes([0.04, 0.33, 0.78, 0.55])
-    _render_region(main_ax, conus_result, states_geojson, all_counties, "conus", cmap, map_norm)
+    _render_region(main_ax, conus_result, states_geojson, all_counties, "conus", cmap, norm)
 
     if "alaska" in ldi_results and ldi_results["alaska"] is not None:
         ak_ax = fig.add_axes(REGIONS["alaska"]["inset_rect"])
-        _render_region(ak_ax, ldi_results["alaska"], states_geojson, all_counties, "alaska", cmap, map_norm)
+        _render_region(ak_ax, ldi_results["alaska"], states_geojson, all_counties, "alaska", cmap, norm)
         ak_ax.text(0.02, 1.04, "ALASKA", transform=ak_ax.transAxes, fontsize=8,
                    family="monospace", color="#333", fontweight="bold", va="bottom")
 
     if "hawaii" in ldi_results and ldi_results["hawaii"] is not None:
         hi_ax = fig.add_axes(REGIONS["hawaii"]["inset_rect"])
-        _render_region(hi_ax, ldi_results["hawaii"], states_geojson, all_counties, "hawaii", cmap, map_norm)
+        _render_region(hi_ax, ldi_results["hawaii"], states_geojson, all_counties, "hawaii", cmap, norm)
         hi_ax.text(0.02, 1.04, "HAWAII", transform=hi_ax.transAxes, fontsize=8,
                    family="monospace", color="#333", fontweight="bold", va="bottom")
 
@@ -153,7 +148,7 @@ def render_map(ldi_results: dict, states_geojson: str, counties_geojson: str, ou
               fontsize=6.3, family="monospace", color="#777", wrap=True)
 
     legend_ax = fig.add_axes([0.85, 0.35, 0.04, 0.53])
-    mesh = plt.cm.ScalarMappable(norm=legend_norm, cmap=cmap)
+    mesh = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
     cbar = fig.colorbar(mesh, cax=legend_ax, boundaries=np.linspace(0, 100, 257), ticks=LDI_BOUNDS)
     cbar.ax.tick_params(labelsize=8)
     cbar.set_ticks(LDI_BOUNDS)
