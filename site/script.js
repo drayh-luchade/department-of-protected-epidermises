@@ -155,6 +155,77 @@ function setupZoomPan(svg) {
   window.addEventListener("mouseup", () => { dragging = false; svg.style.cursor = "grab"; });
   svg.addEventListener("dblclick", resetZoom);
 
+  // --- Touch: one finger pans, two fingers pinch-zoom. CSS touch-action:
+  // none on .state-svg (see styles.css) stops the browser's own
+  // scroll/pinch handling so these don't fight with page scrolling.
+  let lastTouchDist = null;
+  let lastTapTime = 0;
+
+  function touchDist(t0, t1) {
+    return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+  }
+  function touchMid(t0, t1) {
+    return [(t0.clientX + t1.clientX) / 2, (t0.clientY + t1.clientY) / 2];
+  }
+  function svgPointXY(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    return [((clientX - rect.left) / rect.width) * VB.w, ((clientY - rect.top) / rect.height) * VB.h];
+  }
+
+  svg.addEventListener("touchstart", (evt) => {
+    if (evt.touches.length === 1) {
+      dragging = true;
+      lastX = evt.touches[0].clientX;
+      lastY = evt.touches[0].clientY;
+
+      // double-tap to reset, mirroring the desktop dblclick
+      const now = Date.now();
+      if (now - lastTapTime < 300) resetZoom();
+      lastTapTime = now;
+    } else if (evt.touches.length === 2) {
+      dragging = false;
+      lastTouchDist = touchDist(evt.touches[0], evt.touches[1]);
+    }
+  }, { passive: true });
+
+  svg.addEventListener("touchmove", (evt) => {
+    evt.preventDefault();
+    if (evt.touches.length === 1 && dragging) {
+      const t = evt.touches[0];
+      const dx = (t.clientX - lastX) * (VB.w / svg.getBoundingClientRect().width);
+      const dy = (t.clientY - lastY) * (VB.h / svg.getBoundingClientRect().height);
+      zoom.tx += dx; zoom.ty += dy;
+      lastX = t.clientX; lastY = t.clientY;
+      applyZoomTransform();
+    } else if (evt.touches.length === 2) {
+      const [t0, t1] = evt.touches;
+      const dist = touchDist(t0, t1);
+      const [mx, my] = touchMid(t0, t1);
+      if (lastTouchDist) {
+        const factor = dist / lastTouchDist;
+        const newScale = Math.min(zoom.maxScale, Math.max(zoom.minScale, zoom.scale * factor));
+        const [px, py] = svgPointXY(mx, my);
+        zoom.tx = px - ((px - zoom.tx) / zoom.scale) * newScale;
+        zoom.ty = py - ((py - zoom.ty) / zoom.scale) * newScale;
+        zoom.scale = newScale;
+        applyZoomTransform();
+      }
+      lastTouchDist = dist;
+    }
+  }, { passive: false });
+
+  svg.addEventListener("touchend", (evt) => {
+    lastTouchDist = null;
+    if (evt.touches.length === 1) {
+      dragging = true;
+      lastX = evt.touches[0].clientX;
+      lastY = evt.touches[0].clientY;
+    } else if (evt.touches.length === 0) {
+      dragging = false;
+    }
+  });
+  svg.addEventListener("touchcancel", () => { dragging = false; lastTouchDist = null; });
+
   document.getElementById("zoom-reset-btn")?.addEventListener("click", resetZoom);
 }
 
@@ -289,7 +360,7 @@ function populateSummary(data) {
   document.getElementById("afd-issued-line").textContent = "ISSUED: " + fmtIssued(data.issued_utc);
 
   const entries = Object.entries(data.states || {}).sort((a, b) => b[1].ldi - a[1].ldi);
-  const top = entries.slice(0, 6);
+  const top = entries.slice(0, 10);
   const list = document.getElementById("top-states-list");
   list.innerHTML = top.map(([name, v]) => `<li>${name} &mdash; ${v.ldi} (${v.category})</li>`).join("");
   return entries;
@@ -374,6 +445,7 @@ let timelineIndex = [];
 let days = [];
 let currentDate = null;
 let currentHour = null;
+let currentDayData = null;
 
 async function selectEntry(entry) {
   currentDate = entry.date;
@@ -385,15 +457,34 @@ async function selectEntry(entry) {
   document.querySelectorAll("#day-slider-labels span").forEach(s => {
     s.classList.toggle("active", s.dataset.date === entry.date);
   });
+
+  // For each hour button (same 4 buttons regardless of which day is
+  // selected): show the local-time equivalent of that button's UTC hour
+  // on the *currently selected* date, and mark it "already happened" if
+  // that exact UTC instant is at or before the real current moment --
+  // this naturally covers all three cases: a past day (T-3..T-1, always
+  // true), a future day (T+1..T+3, always false), and -- the tricky one --
+  // today, where hours earlier than right now are recorded/analyzed and
+  // hours later today are still forecasts that may change before they
+  // arrive.
+  const nowMs = Date.now();
   document.querySelectorAll("#hour-tabs .day-tab").forEach(t => {
-    t.classList.toggle("active", Number(t.dataset.hour) === entry.hour);
+    const h = Number(t.dataset.hour);
+    t.classList.toggle("active", h === entry.hour);
+    const slotDate = new Date(`${entry.date}T${String(h).padStart(2, "0")}:00:00Z`);
+    const localSpan = t.querySelector(".hour-local");
+    if (localSpan && !isNaN(slotDate.getTime())) {
+      localSpan.textContent = slotDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    t.classList.toggle("is-actual", !isNaN(slotDate.getTime()) && slotDate.getTime() <= nowMs);
   });
-  document.getElementById("today-map").src = `assets/maps/timeline/${entry.file_base}.png`;
+
   document.querySelector(".product-id-line span").textContent =
     `PRODUCT: NLS-LDI-CONUS-${entry.offset_days > 0 ? "FCST" : entry.offset_days < 0 ? "ARCH" : "DAILY"}-${entry.hour_label}`;
 
   try {
     const dayData = await loadJSON(`data/timeline/${entry.file_base}.json`);
+    currentDayData = dayData;
     const sorted = populateSummary(dayData);
     if (!statesGeoCache) statesGeoCache = await loadJSON("assets/us-states.json");
     if (!countiesGeoCache) countiesGeoCache = await loadJSON("assets/us-counties.json");
@@ -445,7 +536,7 @@ async function setupDayTabs() {
     // Hour buttons are the same 4 slots every day
     const hours = [...new Set(timelineIndex.map(e => e.hour))].sort((a, b) => a - b);
     hourContainer.innerHTML = hours.map(h =>
-      `<button class="day-tab" data-hour="${h}">${String(h).padStart(2, "0")}Z</button>`
+      `<button class="day-tab" data-hour="${h}">${String(h).padStart(2, "0")}Z<span class="hour-local"></span></button>`
     ).join("");
     hourContainer.querySelectorAll(".day-tab").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -462,6 +553,7 @@ async function setupDayTabs() {
     hourContainer.innerHTML = "";
     try {
       const dayData = await loadJSON("data/today.json");
+      currentDayData = dayData;
       const sorted = populateSummary(dayData);
       statesGeoCache = await loadJSON("assets/us-states.json");
       countiesGeoCache = await loadJSON("assets/us-counties.json");
@@ -473,6 +565,94 @@ async function setupDayTabs() {
       document.getElementById("afd-text").textContent = "Discussion unavailable: " + err2.message;
     }
   }
+}
+
+// Approximate straight-line distance between two lat/lon points, good
+// enough at the scale of "which county is nearest" (not for precise
+// navigation).
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ZIP -> lat/lon via zippopotam.us (free, no API key). This is an external
+// dependency: if that service ever goes down or rate-limits, this lookup
+// breaks even though the rest of the site doesn't depend on any outside
+// service. An alternative that removes the dependency would be bundling a
+// static ZIP-centroid dataset instead of calling out to a live API.
+async function geocodeZip(zip) {
+  const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+  if (!res.ok) throw new Error("ZIP code not found");
+  const geo = await res.json();
+  const place = geo.places && geo.places[0];
+  if (!place) throw new Error("ZIP code not found");
+  return {
+    lat: parseFloat(place.latitude),
+    lon: parseFloat(place.longitude),
+    placeName: place["place name"],
+    stateAbbr: place["state abbreviation"],
+  };
+}
+
+function nearestCounty(lat, lon, counties) {
+  let best = null, bestDist = Infinity;
+  for (const info of Object.values(counties)) {
+    if (!info.centroid) continue;
+    const [clat, clon] = info.centroid;
+    const d = haversineKm(lat, lon, clat, clon);
+    if (d < bestDist) { bestDist = d; best = info; }
+  }
+  return best ? { info: best, distKm: bestDist } : null;
+}
+
+async function handleZipLookup(zip) {
+  const resultEl = document.getElementById("zip-result");
+  resultEl.className = "zip-result";
+
+  if (!/^\d{5}$/.test(zip)) {
+    resultEl.className = "zip-result error";
+    resultEl.textContent = "Enter a valid 5-digit ZIP code.";
+    return;
+  }
+  if (!currentDayData || !currentDayData.counties) {
+    resultEl.className = "zip-result error";
+    resultEl.textContent = "Data is still loading -- try again in a moment.";
+    return;
+  }
+
+  resultEl.textContent = `Looking up ${zip}\u2026`;
+  try {
+    const geo = await geocodeZip(zip);
+    const nearest = nearestCounty(geo.lat, geo.lon, currentDayData.counties);
+    if (!nearest) throw new Error("No local data available for that area");
+
+    const { info, distKm } = nearest;
+    resultEl.className = "zip-result";
+    resultEl.innerHTML =
+      `<strong>${info.name} County, ${info.state}</strong><br>` +
+      `LDI: ${info.ldi} (${info.category})<br>` +
+      `Humidity: ${info.humidity_pct}% &middot; Wind: ${info.wind_mph} mph &middot; Elevation: ${info.elevation_m} m` +
+      `<span class="zip-result-note">Nearest analyzed county to ${geo.placeName}, ${geo.stateAbbr} ${zip} ` +
+      `(~${Math.round(distKm)} km away). Not an exact per-ZIP measurement -- see the disclaimer below.</span>`;
+  } catch (err) {
+    resultEl.className = "zip-result error";
+    resultEl.textContent = "Couldn't look up that ZIP code (" + err.message + ").";
+  }
+}
+
+function setupZipLookup() {
+  const form = document.getElementById("zip-form");
+  if (!form) return;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const zip = document.getElementById("zip-input").value.trim();
+    handleZipLookup(zip);
+  });
 }
 
 function setupMonthTabs() {
@@ -492,6 +672,7 @@ async function init() {
   setupZoomPan(svg);
   await setupDayTabs();
   setupMonthTabs();
+  setupZipLookup();
 }
 
 init();

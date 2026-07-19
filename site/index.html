@@ -73,12 +73,15 @@
       <div class="day-slider-labels" id="day-slider-labels"></div>
     </div>
     <div class="day-tabs hour-tabs" id="hour-tabs"></div>
+    <p class="hour-caption">Times shown in UTC (Z); your local equivalent is listed below each button.
+      Hours marked with a <span class="hour-caption-swatch"></span> green underline have already occurred
+      and reflect recorded conditions &mdash; hours without it are still model forecasts for later today
+      and may change before they arrive.</p>
 
     <div class="today-grid">
       <div class="map-panel">
-        <img id="today-map" src="assets/maps/today.png" alt="Map of the Lotion Demand Index across the United States, including Alaska and Hawaii insets">
         <div class="map-controls">
-          <p class="map-caption">County-level detail below. Scroll/pinch to zoom, drag to pan, hover for details.</p>
+          <p class="map-caption">Scroll/pinch to zoom, drag to pan, hover or tap for county details.</p>
           <button id="zoom-reset-btn" class="zoom-reset-btn">Reset Zoom</button>
         </div>
         <svg id="state-svg" viewBox="0 0 800 500" class="state-svg" role="img" aria-label="Interactive county-level Lotion Demand Index map"></svg>
@@ -102,6 +105,16 @@
           <div class="summary-value" id="national-ldi">&ndash;</div>
           <div class="summary-category" id="national-category">Loading&hellip;</div>
         </div>
+
+        <div class="zip-lookup">
+          <div class="zip-lookup-label">Find Your Local Conditions</div>
+          <form id="zip-form" class="zip-form">
+            <input type="text" id="zip-input" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5-digit ZIP code" aria-label="ZIP code">
+            <button type="submit" class="zip-submit-btn">Go</button>
+          </form>
+          <div id="zip-result" class="zip-result"></div>
+        </div>
+
         <div class="top-states">
           <div class="top-states-title">Highest Demand Right Now</div>
           <ol id="top-states-list"><li>Loading&hellip;</li></ol>

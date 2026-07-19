@@ -133,7 +133,6 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   .today-grid { grid-template-columns: 1fr; }
 }
 .map-panel { position: relative; }
-.map-panel img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 2px; }
 .map-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 10px; }
 .map-caption { font-size: 0.75rem; color: var(--ink-soft); margin: 0; }
 .zoom-reset-btn {
@@ -230,6 +229,59 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 }
 .scale-caption-text strong { color: var(--ink); }
 
+.zip-lookup {
+  background: #eef1ee;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 14px;
+}
+.zip-lookup-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+.zip-form { display: flex; gap: 8px; }
+.zip-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+}
+.zip-submit-btn {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 7px 16px;
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.zip-submit-btn:hover { background: var(--navy-dark); border-color: var(--navy-dark); }
+.zip-result {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  line-height: 1.5;
+  min-height: 0;
+}
+.zip-result.error { color: #a33; }
+.zip-result-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
 .top-states-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
 #top-states-list { margin: 0; padding-left: 20px; font-size: 0.85rem; }
 #top-states-list li { margin-bottom: 3px; }
@@ -320,8 +372,32 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 }
 .day-tab.active, .day-tab:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
 .day-tab.forecast.active { background: #38686f; border-color: #38686f; }
-.hour-tabs { margin-top: -6px; margin-bottom: 16px; }
+.hour-tabs { margin-top: -6px; margin-bottom: 8px; }
 .hour-tabs .day-tab { padding: 4px 12px; font-size: 0.7rem; opacity: 0.9; }
+.hour-tabs .day-tab .hour-local {
+  display: block;
+  font-size: 0.62rem;
+  opacity: 0.85;
+  margin-top: 2px;
+  font-weight: 400;
+}
+.hour-tabs .day-tab.is-actual { border-bottom: 3px solid var(--c-mild); }
+.hour-tabs .day-tab.is-actual.active { border-bottom-color: #fff; }
+.hour-caption {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.hour-caption-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--c-mild);
+  vertical-align: middle;
+  margin: 0 1px;
+}
 
 #normal-map { width: 100%; border: 1px solid var(--line); border-radius: 2px; display: block; }
 
