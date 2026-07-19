@@ -73,10 +73,18 @@
       <div class="day-slider-labels" id="day-slider-labels"></div>
     </div>
     <div class="day-tabs hour-tabs" id="hour-tabs"></div>
-    <p class="hour-caption">Times shown in UTC (Z); your local equivalent is listed below each button.
+    <p class="hour-caption">Times shown in UTC (Z); your local equivalent is listed below each button
+      (a "prev day"/"next day" note appears if that hour actually falls on a different local calendar
+      date than the T-3&hellip;T+3 day selected above &mdash; since each day here is a UTC calendar date,
+      its first and/or last hour can spill into your local yesterday or tomorrow).
       Hours marked with a <span class="hour-caption-swatch"></span> green underline have already occurred
       and reflect recorded conditions &mdash; hours without it are still model forecasts for later today
-      and may change before they arrive.</p>
+      and may change before they arrive.
+      <button type="button" id="tz-toggle" class="tz-toggle">Show all U.S. time zones &#9662;</button>
+    </p>
+    <div id="tz-table-wrap" class="tz-table-wrap hidden">
+      <table id="tz-table" class="tz-table"><thead></thead><tbody></tbody></table>
+    </div>
 
     <div class="today-grid">
       <div class="map-panel">

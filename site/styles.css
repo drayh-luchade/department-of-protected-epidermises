@@ -398,6 +398,50 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   vertical-align: middle;
   margin: 0 1px;
 }
+.tz-toggle {
+  display: inline-block;
+  margin-left: 4px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--navy);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.tz-toggle:hover { color: var(--navy-dark); }
+
+.tz-table-wrap { margin-bottom: 16px; overflow-x: auto; }
+.tz-table-wrap.hidden { display: none; }
+.tz-table {
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.tz-table th, .tz-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.tz-table thead th {
+  font-family: var(--mono);
+  color: var(--ink-soft);
+  font-weight: 700;
+  border-bottom: 2px solid var(--line);
+}
+.tz-table tbody th {
+  font-weight: 700;
+  color: var(--navy-dark);
+  white-space: nowrap;
+}
+.tz-daynote {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
 
 #normal-map { width: 100%; border: 1px solid var(--line); border-radius: 2px; display: block; }
 

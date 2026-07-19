@@ -79,6 +79,40 @@ function makeInsetProjection(bbox, padDeg) {
   };
 }
 
+// Six zones actually in use across the US: the four CONUS zones plus
+// Alaska and Hawaii, which each run on their own offset (Hawaii never
+// observes DST at all; Arizona within "Mountain" is a known exception we
+// aren't special-casing here since it's one state within one zone).
+const US_TIME_ZONES = [
+  { key: "ET", label: "Eastern", tz: "America/New_York" },
+  { key: "CT", label: "Central", tz: "America/Chicago" },
+  { key: "MT", label: "Mountain", tz: "America/Denver" },
+  { key: "PT", label: "Pacific", tz: "America/Los_Angeles" },
+  { key: "AKT", label: "Alaska", tz: "America/Anchorage" },
+  { key: "HST", label: "Hawaii", tz: "Pacific/Honolulu" },
+];
+
+// Formats `utcDate` (a Date built from a specific Z-hour slot) in the
+// given IANA time zone, and flags whether that local moment actually
+// falls on a different calendar day than `refDateStr` (the UTC day
+// currently selected, e.g. "2026-07-19") -- this is the "00Z is really
+// last night" case: the day tabs group by UTC calendar date, so a
+// time zone behind UTC can land in its own yesterday, and one ahead of
+// UTC can land in its own tomorrow, for the very first/last hour slots.
+function formatInZone(utcDate, tz, refDateStr) {
+  const timeStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour: "numeric", minute: "2-digit",
+  }).format(utcDate);
+  // en-CA gives YYYY-MM-DD, directly comparable to refDateStr as strings
+  const localDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(utcDate);
+  let dayNote = "";
+  if (localDateStr < refDateStr) dayNote = " (prev day)";
+  else if (localDateStr > refDateStr) dayNote = " (next day)";
+  return { timeStr, dayNote };
+}
+
 function ringsToPathD(polys, projector) {
   let d = "";
   for (const poly of polys) {
@@ -447,6 +481,46 @@ let currentDate = null;
 let currentHour = null;
 let currentDayData = null;
 
+// Full reference table: every hour slot across all six US zones, for
+// whichever day is currently selected (recomputed on every selectEntry
+// since DST status and day-shift both depend on the actual date).
+function buildTimezoneTable(entry) {
+  const table = document.getElementById("tz-table");
+  if (!table) return;
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  if (!thead || !tbody) return;
+
+  const hours = [...new Set(timelineIndex.map(e => e.hour))].sort((a, b) => a - b);
+  if (!hours.length) return;
+
+  thead.innerHTML = "<tr><th></th>" +
+    hours.map(h => `<th>${String(h).padStart(2, "0")}Z</th>`).join("") + "</tr>";
+
+  tbody.innerHTML = US_TIME_ZONES.map(zone => {
+    const cells = hours.map(h => {
+      const slotDate = new Date(`${entry.date}T${String(h).padStart(2, "0")}:00:00Z`);
+      if (isNaN(slotDate.getTime())) return "<td>&ndash;</td>";
+      const { timeStr, dayNote } = formatInZone(slotDate, zone.tz, entry.date);
+      return `<td>${timeStr}${dayNote ? `<span class="tz-daynote">${dayNote}</span>` : ""}</td>`;
+    }).join("");
+    return `<tr><th>${zone.label} (${zone.key})</th>${cells}</tr>`;
+  }).join("");
+}
+
+function setupTzToggle() {
+  const btn = document.getElementById("tz-toggle");
+  const wrap = document.getElementById("tz-table-wrap");
+  if (!btn || !wrap) return;
+  btn.addEventListener("click", () => {
+    const currentlyHidden = wrap.classList.contains("hidden");
+    wrap.classList.toggle("hidden", !currentlyHidden);
+    btn.innerHTML = currentlyHidden
+      ? "Hide all U.S. time zones &#9652;"
+      : "Show all U.S. time zones &#9662;";
+  });
+}
+
 async function selectEntry(entry) {
   currentDate = entry.date;
   currentHour = entry.hour;
@@ -468,16 +542,19 @@ async function selectEntry(entry) {
   // hours later today are still forecasts that may change before they
   // arrive.
   const nowMs = Date.now();
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   document.querySelectorAll("#hour-tabs .day-tab").forEach(t => {
     const h = Number(t.dataset.hour);
     t.classList.toggle("active", h === entry.hour);
     const slotDate = new Date(`${entry.date}T${String(h).padStart(2, "0")}:00:00Z`);
     const localSpan = t.querySelector(".hour-local");
     if (localSpan && !isNaN(slotDate.getTime())) {
-      localSpan.textContent = slotDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      const { timeStr, dayNote } = formatInZone(slotDate, browserTz, entry.date);
+      localSpan.textContent = timeStr + dayNote;
     }
     t.classList.toggle("is-actual", !isNaN(slotDate.getTime()) && slotDate.getTime() <= nowMs);
   });
+  buildTimezoneTable(entry);
 
   document.querySelector(".product-id-line span").textContent =
     `PRODUCT: NLS-LDI-CONUS-${entry.offset_days > 0 ? "FCST" : entry.offset_days < 0 ? "ARCH" : "DAILY"}-${entry.hour_label}`;
@@ -673,6 +750,7 @@ async function init() {
   await setupDayTabs();
   setupMonthTabs();
   setupZipLookup();
+  setupTzToggle();
 }
 
 init();
