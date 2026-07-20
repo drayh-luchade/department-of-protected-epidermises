@@ -5,14 +5,21 @@ run_pipeline.py
                                           synoptic-hour timestamp (00/06/12/18
                                           UTC) from T-3 to T+3 -- 28 steps
                                           total -- for all 3 regions. Writes
-                                          assets/maps/timeline/<date>_<hh>z.png,
-                                          data/timeline/<date>_<hh>z.json, and
-                                          data/timeline_index.json. Also
+                                          site/assets/maps/timeline/<date>_<hh>z.png,
+                                          site/data/timeline/<date>_<hh>z.json, and
+                                          site/data/timeline_index.json. Also
                                           copies whichever timestamp is
                                           closest to "now" to
-                                          assets/maps/today.png / data/today.json
-                                          for backward compatibility.
-    python run_pipeline.py monthly    -> the 12 assets/maps/monthly/*.png
+                                          site/assets/maps/today.png / site/data/today.json
+                                          for backward compatibility. Prunes
+                                          any leftover timeline files whose
+                                          date/hour falls outside the current
+                                          window -- this used to be missing
+                                          entirely, which is why old dates and
+                                          a legacy bare-date (pre-hourly)
+                                          filename format both accumulated
+                                          indefinitely in git history.
+    python run_pipeline.py monthly    -> the 12 site/assets/maps/monthly/*.png
                                           climate-normal products (unchanged
                                           single-day-per-month demo data).
 
@@ -20,6 +27,14 @@ Live path: fetch_open_meteo.py, tried first for each region -- now hourly,
 sampled at the 4 synoptic hours (see that module's docstring for why).
 Falls back to demo_data.py (same timestamp-keyed schema, with a diurnal
 cycle) if the live fetch fails for any reason.
+
+NOTE: this writes directly into site/, which is the actual GitHub Pages
+deployment root -- there is deliberately no separate root-level assets/ or
+data/ anymore. Previously the pipeline wrote to root assets/data/ and a
+workflow step copied everything into site/, which meant every generated
+file was committed twice (see repo cleanup notes in README). Writing
+straight into site/ removes that duplication at the source instead of
+copying around it.
 """
 
 import calendar
@@ -35,8 +50,11 @@ from demo_data import make_demo_grid, make_demo_timeseries
 from compute_ldi import compute_ldi
 from make_map import render_map, export_json
 
-STATES_GEOJSON = "../assets/us-states.json"
-COUNTIES_GEOJSON = "../assets/us-counties.json"
+SITE_ROOT = "../site"
+STATES_GEOJSON = f"{SITE_ROOT}/assets/us-states.json"
+COUNTIES_GEOJSON = f"{SITE_ROOT}/assets/us-counties.json"
+TIMELINE_MAPS_DIR = f"{SITE_ROOT}/assets/maps/timeline"
+TIMELINE_DATA_DIR = f"{SITE_ROOT}/data/timeline"
 
 
 def get_region_timeseries(region_key: str) -> dict:
@@ -61,9 +79,26 @@ def _filename_base(date_str: str, hour: int) -> str:
     return f"{date_str}_{hour:02d}z"
 
 
+def _prune_stale_timeline_files(valid_bases: set):
+    """Delete any timeline PNG/JSON whose base name isn't part of the
+    current T-3..T+3 window. This also incidentally removes the legacy
+    bare-date files (e.g. '2026-07-15.png') left over from before the
+    hourly format existed, since their base never matches a current
+    '<date>_<hh>z' entry."""
+    for directory in (TIMELINE_MAPS_DIR, TIMELINE_DATA_DIR):
+        if not os.path.isdir(directory):
+            continue
+        for fname in os.listdir(directory):
+            base = fname.rsplit(".", 1)[0]
+            if base not in valid_bases:
+                path = os.path.join(directory, fname)
+                os.remove(path)
+                print(f"  [prune] removed stale {path}")
+
+
 def run_timeline():
-    os.makedirs("../assets/maps/timeline", exist_ok=True)
-    os.makedirs("../data/timeline", exist_ok=True)
+    os.makedirs(TIMELINE_MAPS_DIR, exist_ok=True)
+    os.makedirs(TIMELINE_DATA_DIR, exist_ok=True)
 
     region_series = {key: get_region_timeseries(key) for key in REGIONS}
     all_timestamps = sorted(set().union(*[set(s.keys()) for s in region_series.values()]))
@@ -71,7 +106,7 @@ def run_timeline():
 
     index_entries = []
     now_utc = dt.datetime.now(dt.timezone.utc)
-    closest_ts, closest_diff = None, None
+    closest_ts, closest_diff, closest_base = None, None, None
 
     for ts in all_timestamps:
         date_str, hour = _parse_timestamp(ts)
@@ -96,8 +131,8 @@ def run_timeline():
         product_id = f"NLS-LDI-CONUS-{'FCST' if offset_days > 0 else 'ARCH' if offset_days < 0 else 'DAILY'}-{hour:02d}Z"
 
         base = _filename_base(date_str, hour)
-        png_path = f"../assets/maps/timeline/{base}.png"
-        json_path = f"../data/timeline/{base}.json"
+        png_path = f"{TIMELINE_MAPS_DIR}/{base}.png"
+        json_path = f"{TIMELINE_DATA_DIR}/{base}.json"
         render_map(ldi_results, STATES_GEOJSON, COUNTIES_GEOJSON, png_path,
                    product_id=product_id, label=label)
         export_json(ldi_results, json_path, states_geojson=STATES_GEOJSON,
@@ -118,20 +153,26 @@ def run_timeline():
             closest_diff, closest_ts, closest_base = diff, ts, base
 
     if closest_ts:
-        shutil.copy(f"../assets/maps/timeline/{closest_base}.png", "../assets/maps/today.png")
-        shutil.copy(f"../data/timeline/{closest_base}.json", "../data/today.json")
+        shutil.copy(f"{TIMELINE_MAPS_DIR}/{closest_base}.png", f"{SITE_ROOT}/assets/maps/today.png")
+        shutil.copy(f"{TIMELINE_DATA_DIR}/{closest_base}.json", f"{SITE_ROOT}/data/today.json")
         print(f"'today' alias -> {closest_ts} (closest to current time)")
         for e in index_entries:
             e["is_now"] = (e["timestamp"] == closest_ts)
 
     index_entries.sort(key=lambda e: e["timestamp"])
-    with open("../data/timeline_index.json", "w") as f:
+    with open(f"{SITE_ROOT}/data/timeline_index.json", "w") as f:
         json.dump(index_entries, f)
+
+    valid_bases = {e["file_base"] for e in index_entries}
+    _prune_stale_timeline_files(valid_bases)
+
     print("Timeline complete:", len(index_entries), "timestamps "
           f"({len(index_entries)//4} days x 4 synoptic hours).")
 
 
 def run_monthly():
+    monthly_dir = f"{SITE_ROOT}/assets/maps/monthly"
+    os.makedirs(monthly_dir, exist_ok=True)
     for month in range(1, 13):
         seed = month * 17
         rep_date = dt.date(2026, month, 15)
@@ -146,7 +187,7 @@ def run_monthly():
             ldi_results[region_key] = result
 
         render_map(ldi_results, STATES_GEOJSON, COUNTIES_GEOJSON,
-                   f"../assets/maps/monthly/{month_name}.png",
+                   f"{monthly_dir}/{month_name}.png",
                    product_id=f"NLS-LDI-CONUS-NORMAL-{calendar.month_abbr[month].upper()}",
                    label=f"{calendar.month_name[month]} Climate Normal (1991-2020) — Lotion Demand Index")
         print(f"  {month_name}.png done.")
