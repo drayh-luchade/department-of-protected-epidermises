@@ -36,9 +36,19 @@ jobs:
           git commit -m "Automated LDI timeline update $(date -u +%Y-%m-%dT%H:%MZ)"
           success=false
           for i in 1 2 3 4 5; do
-            if git pull --rebase origin main && git push; then
-              success=true
-              break
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin main; then
+                success=true
+                break
+              fi
+            else
+              echo "Rebase hit a real conflict (likely another run's regenerated files) -- aborting rebase and retrying with a merge that keeps our freshly-generated content instead"
+              git rebase --abort
+              if git merge -X ours origin/main --no-edit && git push origin main; then
+                success=true
+                break
+              fi
             fi
             echo "Push rejected, retrying ($i)..."
             sleep $((RANDOM % 5 + 1))
@@ -85,9 +95,19 @@ jobs:
           git commit -m "Refresh monthly normals"
           success=false
           for i in 1 2 3 4 5; do
-            if git pull --rebase origin main && git push; then
-              success=true
-              break
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin main; then
+                success=true
+                break
+              fi
+            else
+              echo "Rebase hit a real conflict -- aborting rebase and retrying with a merge that keeps our freshly-generated content instead"
+              git rebase --abort
+              if git merge -X ours origin/main --no-edit && git push origin main; then
+                success=true
+                break
+              fi
             fi
             echo "Push rejected, retrying ($i)..."
             sleep $((RANDOM % 5 + 1))
