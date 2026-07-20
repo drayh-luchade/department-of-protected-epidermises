@@ -1,68 +1,56 @@
 name: Update Lotion Demand Index
-
 on:
   schedule:
     - cron: "0 */6 * * *"   # every 6 hours
   workflow_dispatch: {}       # allow manual trigger from the Actions tab
   push:
     branches: [main]
-
 permissions:
   contents: write
   pages: write
   id-token: write
-
 concurrency:
   group: "pages"
   cancel-in-progress: false
-
 jobs:
   update-data:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Run the 7-day timeline pipeline (T-3..T+3)
         working-directory: scripts
         run: python run_pipeline.py timeline
-
-      - name: Sync generated assets into site/
-        run: |
-          mkdir -p site/assets/maps/timeline site/data/timeline
-          cp -r assets/maps/timeline/. site/assets/maps/timeline/
-          cp -r data/timeline/. site/data/timeline/
-          cp data/timeline_index.json site/data/timeline_index.json
-          cp assets/maps/today.png site/assets/maps/today.png
-          cp data/today.json site/data/today.json
-
       - name: Commit updated products
         run: |
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
-          git add assets/maps/timeline data/timeline data/timeline_index.json \
-                   assets/maps/today.png data/today.json \
-                   site/assets/maps/timeline site/data/timeline site/data/timeline_index.json \
+          git add site/assets/maps/timeline site/data/timeline \
+                   site/data/timeline_index.json \
                    site/assets/maps/today.png site/data/today.json
           git diff --staged --quiet && exit 0
           git commit -m "Automated LDI timeline update $(date -u +%Y-%m-%dT%H:%MZ)"
+          success=false
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push && break
+            if git pull --rebase origin main && git push; then
+              success=true
+              break
+            fi
             echo "Push rejected, retrying ($i)..."
             sleep $((RANDOM % 5 + 1))
           done
-
+          if [ "$success" != "true" ]; then
+            echo "::error::Failed to push updated products after 5 attempts"
+            exit 1
+          fi
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
-
   deploy:
     needs: update-data
     runs-on: ubuntu-latest
@@ -73,7 +61,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
   monthly-normals:
     # Runs far less often than the daily timeline -- monthly normals are
     # meant to be 30-year climatology and don't need refreshing every 6
@@ -91,16 +78,21 @@ jobs:
       - working-directory: scripts
         run: python run_pipeline.py monthly
       - run: |
-          mkdir -p site/assets/maps/monthly
-          cp -r assets/maps/monthly/. site/assets/maps/monthly/
-      - run: |
           git config user.name "nls-bot"
           git config user.email "actions@github.com"
-          git add assets/maps/monthly site/assets/maps/monthly
+          git add site/assets/maps/monthly
           git diff --staged --quiet && exit 0
           git commit -m "Refresh monthly normals"
+          success=false
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main && git push && break
+            if git pull --rebase origin main && git push; then
+              success=true
+              break
+            fi
             echo "Push rejected, retrying ($i)..."
             sleep $((RANDOM % 5 + 1))
           done
+          if [ "$success" != "true" ]; then
+            echo "::error::Failed to push monthly normals after 5 attempts"
+            exit 1
+          fi
