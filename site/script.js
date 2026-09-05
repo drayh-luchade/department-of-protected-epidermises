@@ -1,9 +1,7 @@
-// Same 6 stops as LDI_COLORS in make_map.py, evenly spaced across 0-100 --
-// matplotlib's LinearSegmentedColormap.from_list spaces a flat color list
-// evenly by default, so this mirrors that rather than the 0/20/40/60/80/90/100
-// legend boundaries (those are label positions only, not color-transition
-// points -- see the scale legend in index.html).
-const LDI_GRADIENT_STOPS = ["#4a6fa5", "#7fc6a4", "#b9c99a", "#e8dcc0", "#8b8fce", "#6b46c1"];
+// Matches make_map.py's LDI_COLORS exactly: purple and periwinkle
+// dropped entirely, just blue -> seafoam -> sage -> beige stretched
+// across the full 0-100 range.
+const LDI_GRADIENT_STOPS = ["#4a6fa5", "#7fc6a4", "#b9c99a", "#e8dcc0"];
 
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -28,8 +26,7 @@ function colorFor(ldi) {
 }
 
 // Equirectangular projection matched to the CONUS bbox used in the Python
-// pipeline (regions.py REGIONS.conus.bbox). Alaska/Hawaii insets are baked
-// into the PNG itself and are not part of this interactive overlay.
+// pipeline (regions.py REGIONS.conus.bbox).
 const BBOX = { lat_min: 24.5, lat_max: 49.5, lon_min: -125.0, lon_max: -66.5 };
 const VB = { w: 800, h: 500, pad: 20 };
 const CONUS_EXCLUDE_STATE_FIPS = new Set(["02", "15", "72"]);
@@ -40,24 +37,14 @@ function project([lon, lat]) {
   return [x, y];
 }
 
-// Alaska/Hawaii inset maps: bbox and padding match regions.py's REGIONS
-// and REGION_PAD_DEG exactly. These are hover-only, non-zoomable, so each
-// gets its own small SVG with a viewBox sized to preserve true aspect
-// ratio (cos(mean_lat) correction), the same fix make_map.py's
-// _render_region uses for the static PNG insets -- otherwise Alaska
-// would look squashed/stretched at high latitude.
 const INSET_REGIONS = {
   alaska: {
     bbox: { lat_min: 51.0, lat_max: 71.5, lon_min: -170.0, lon_max: -130.0 },
-    padDeg: 0.6,
-    stateFips: "02",
-    stateName: "Alaska",
+    padDeg: 0.6, stateFips: "02", stateName: "Alaska",
   },
   hawaii: {
     bbox: { lat_min: 18.5, lat_max: 22.5, lon_min: -160.5, lon_max: -154.5 },
-    padDeg: 0.3,
-    stateFips: "15",
-    stateName: "Hawaii",
+    padDeg: 0.3, stateFips: "15", stateName: "Hawaii",
   },
 };
 
@@ -69,20 +56,15 @@ function makeInsetProjection(bbox, padDeg) {
   const width = (bbox.lon_max - bbox.lon_min + 2 * padDeg) * cosLat;
   const height = bbox.lat_max - bbox.lat_min + 2 * padDeg;
   return {
-    width,
-    height,
+    width, height,
     project([lon, lat]) {
       const x = (lon - lonMin) * cosLat;
-      const y = height - (lat - latMin); // flip so north is up
+      const y = height - (lat - latMin);
       return [x, y];
     },
   };
 }
 
-// Six zones actually in use across the US: the four CONUS zones plus
-// Alaska and Hawaii, which each run on their own offset (Hawaii never
-// observes DST at all; Arizona within "Mountain" is a known exception we
-// aren't special-casing here since it's one state within one zone).
 const US_TIME_ZONES = [
   { key: "ET", label: "Eastern", tz: "America/New_York" },
   { key: "CT", label: "Central", tz: "America/Chicago" },
@@ -92,25 +74,89 @@ const US_TIME_ZONES = [
   { key: "HST", label: "Hawaii", tz: "Pacific/Honolulu" },
 ];
 
-// Formats `utcDate` (a Date built from a specific Z-hour slot) in the
-// given IANA time zone, and flags whether that local moment actually
-// falls on a different calendar day than `refDateStr` (the UTC day
-// currently selected, e.g. "2026-07-19") -- this is the "00Z is really
-// last night" case: the day tabs group by UTC calendar date, so a
-// time zone behind UTC can land in its own yesterday, and one ahead of
-// UTC can land in its own tomorrow, for the very first/last hour slots.
+// ---------------------------------------------------------------------
+// Timezone math. This is the piece the whole local-day-bucketing scheme
+// depends on: converting a *wall-clock* time in an arbitrary IANA zone
+// into the correct UTC instant, accounting for that zone's DST rules on
+// that specific date (a fixed UTC offset assumption breaks near DST
+// transitions). Standard iterative offset-correction: guess an instant,
+// see what wall time it actually displays as in the target zone, adjust
+// by the difference, repeat until it converges (2 passes is enough for
+// every real-world zone, including half/quarter-hour-offset zones).
+// ---------------------------------------------------------------------
+function zonedTimeToUtc(dateStr, hour, minute, tz) {
+  let guess = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`);
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }).formatToParts(guess);
+    const get = (type) => Number(parts.find(p => p.type === type).value);
+    const shownAsUtcMs = Date.UTC(get("year"), get("month") - 1, get("day"),
+                                   get("hour"), get("minute"), get("second"));
+    const diff = shownAsUtcMs - guess.getTime();
+    if (diff === 0) break;
+    guess = new Date(guess.getTime() - diff);
+  }
+  return guess;
+}
+
+function getLocalDateStr(date, tz) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+}
+
+function addDaysToDateStr(dateStr, days) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+// Formats `utcDate` in the given IANA zone, and flags whether that local
+// moment falls on a different calendar day than `refDateStr`.
 function formatInZone(utcDate, tz, refDateStr) {
   const timeStr = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, hour: "numeric", minute: "2-digit",
   }).format(utcDate);
-  // en-CA gives YYYY-MM-DD, directly comparable to refDateStr as strings
-  const localDateStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(utcDate);
+  const localDateStr = getLocalDateStr(utcDate, tz);
   let dayNote = "";
   if (localDateStr < refDateStr) dayNote = " (prev day)";
   else if (localDateStr > refDateStr) dayNote = " (next day)";
   return { timeStr, dayNote };
+}
+
+// Buckets the raw (UTC-timestamped) timeline entries into the VIEWER's
+// own local calendar days, localToday-3 .. localToday+3. Because our
+// sampling interval (6h) divides evenly into a calendar day (24h), every
+// bucket contains exactly 4 entries for any UTC offset -- except right
+// at a DST transition, where a local day is 23 or 25 hours long and can
+// hold 3 or 5; the UI just displays however many actually landed there
+// rather than forcing an exact count.
+function buildLocalDayBuckets(timelineIndex, tz) {
+  const localToday = getLocalDateStr(new Date(), tz);
+  const dayLabels = ["T-3", "T-2", "T-1", "TODAY", "T+1", "T+2", "T+3"];
+
+  const parsed = timelineIndex.map(e => ({
+    entry: e, instant: new Date(e.timestamp + "Z"),
+  }));
+
+  const days = [];
+  for (let offset = -3; offset <= 3; offset++) {
+    const dateStr = addDaysToDateStr(localToday, offset);
+    const nextDateStr = addDaysToDateStr(dateStr, 1);
+    const midnight = zonedTimeToUtc(dateStr, 0, 0, tz);
+    const nextMidnight = zonedTimeToUtc(nextDateStr, 0, 0, tz);
+    const entries = parsed
+      .filter(p => p.instant >= midnight && p.instant < nextMidnight)
+      .map(p => p.entry)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    days.push({
+      date: dateStr, label: dayLabels[offset + 3], forecast: offset > 0, entries,
+    });
+  }
+  return days;
 }
 
 function ringsToPathD(polys, projector) {
@@ -167,7 +213,6 @@ function setupZoomPan(svg) {
     const [px, py] = svgPoint(evt);
     const factor = evt.deltaY < 0 ? 1.2 : 1 / 1.2;
     const newScale = Math.min(zoom.maxScale, Math.max(zoom.minScale, zoom.scale * factor));
-    // keep the point under the cursor fixed while zooming
     zoom.tx = px - ((px - zoom.tx) / zoom.scale) * newScale;
     zoom.ty = py - ((py - zoom.ty) / zoom.scale) * newScale;
     zoom.scale = newScale;
@@ -189,9 +234,6 @@ function setupZoomPan(svg) {
   window.addEventListener("mouseup", () => { dragging = false; svg.style.cursor = "grab"; });
   svg.addEventListener("dblclick", resetZoom);
 
-  // --- Touch: one finger pans, two fingers pinch-zoom. CSS touch-action:
-  // none on .state-svg (see styles.css) stops the browser's own
-  // scroll/pinch handling so these don't fight with page scrolling.
   let lastTouchDist = null;
   let lastTapTime = 0;
 
@@ -211,8 +253,6 @@ function setupZoomPan(svg) {
       dragging = true;
       lastX = evt.touches[0].clientX;
       lastY = evt.touches[0].clientY;
-
-      // double-tap to reset, mirroring the desktop dblclick
       const now = Date.now();
       if (now - lastTapTime < 300) resetZoom();
       lastTapTime = now;
@@ -307,7 +347,6 @@ function buildCountyMap(countiesGeo, statesGeo, dayData) {
     path.addEventListener("mouseleave", () => tooltip.classList.add("hidden"));
   });
 
-  // State outlines drawn on top for orientation while zoomed in
   statesGeo.features.forEach(feature => {
     const name = feature.properties.name;
     if (["Alaska", "Hawaii", "Puerto Rico"].includes(name)) return;
@@ -322,9 +361,6 @@ function buildCountyMap(countiesGeo, statesGeo, dayData) {
   applyZoomTransform();
 }
 
-// Alaska/Hawaii: hover-only county detail, no zoom/pan (their bboxes are
-// small enough that panning/zooming doesn't add value the way it does for
-// CONUS). Reuses the same #tooltip element as the main map.
 function buildInsetMap(regionKey, svgId, countiesGeo, statesGeo, dayData) {
   const svg = document.getElementById(svgId);
   const tooltip = document.getElementById("tooltip");
@@ -435,9 +471,9 @@ FUNCTION WITHOUT SUPPLEMENTAL INTERVENTION.
 
 .OUTLOOK...
 COUNTY-LEVEL DETAIL IS AVAILABLE ON THE MAP ABOVE -- SCROLL TO ZOOM,
-DRAG TO PAN, DOUBLE-CLICK TO RESET. USE THE DAY SELECTOR (T-3..T+3) AND
-HOUR SELECTOR (00Z/06Z/12Z/18Z) ABOVE FOR ARCHIVED ANALYSES AND THE
-MODEL-BASED OUTLOOK, EACH AT THE SAME 6-HOUR RESOLUTION.
+DRAG TO PAN, DOUBLE-CLICK TO RESET. USE THE DAY SLIDER AND HOUR
+SELECTOR ABOVE (SHOWN IN YOUR LOCAL TIME) FOR ARCHIVED ANALYSES AND
+THE MODEL-BASED OUTLOOK, OR PRESS PLAY TO STEP THROUGH AUTOMATICALLY.
 
 $$
 NLS FORECAST DESK`;
@@ -476,32 +512,37 @@ function buildAdvisories(sortedEntries) {
 }
 
 let timelineIndex = [];
-let days = [];
-let currentDate = null;
-let currentHour = null;
+let days = [];               // local-day buckets, see buildLocalDayBuckets()
+let browserTz = "UTC";
+let currentEntry = null;
+let currentDayIdx = 0;
 let currentDayData = null;
+let playState = { playing: false, timeoutId: null };
 
-// Full reference table: every hour slot across all six US zones, for
-// whichever day is currently selected (recomputed on every selectEntry
-// since DST status and day-shift both depend on the actual date).
-function buildTimezoneTable(entry) {
+function findDayAndSlot(entry) {
+  for (let di = 0; di < days.length; di++) {
+    const si = days[di].entries.findIndex(e => e.timestamp === entry.timestamp);
+    if (si !== -1) return { dayIdx: di, slotIdx: si };
+  }
+  return null;
+}
+
+// Reference table: for the currently selected local day, show every
+// zone's reading of each of that day's raw instants (usually 4).
+function buildTimezoneTable(day) {
   const table = document.getElementById("tz-table");
-  if (!table) return;
+  if (!table || !day.entries.length) return;
   const thead = table.querySelector("thead");
   const tbody = table.querySelector("tbody");
   if (!thead || !tbody) return;
 
-  const hours = [...new Set(timelineIndex.map(e => e.hour))].sort((a, b) => a - b);
-  if (!hours.length) return;
-
   thead.innerHTML = "<tr><th></th>" +
-    hours.map(h => `<th>${String(h).padStart(2, "0")}Z</th>`).join("") + "</tr>";
+    day.entries.map(e => `<th>${e.hour_label}</th>`).join("") + "</tr>";
 
   tbody.innerHTML = US_TIME_ZONES.map(zone => {
-    const cells = hours.map(h => {
-      const slotDate = new Date(`${entry.date}T${String(h).padStart(2, "0")}:00:00Z`);
-      if (isNaN(slotDate.getTime())) return "<td>&ndash;</td>";
-      const { timeStr, dayNote } = formatInZone(slotDate, zone.tz, entry.date);
+    const cells = day.entries.map(e => {
+      const instant = new Date(e.timestamp + "Z");
+      const { timeStr, dayNote } = formatInZone(instant, zone.tz, day.date);
       return `<td>${timeStr}${dayNote ? `<span class="tz-daynote">${dayNote}</span>` : ""}</td>`;
     }).join("");
     return `<tr><th>${zone.label} (${zone.key})</th>${cells}</tr>`;
@@ -521,40 +562,39 @@ function setupTzToggle() {
   });
 }
 
-async function selectEntry(entry) {
-  currentDate = entry.date;
-  currentHour = entry.hour;
-
-  const dayIndex = days.findIndex(d => d.date === entry.date);
-  const slider = document.getElementById("day-slider");
-  if (slider && dayIndex !== -1) slider.value = dayIndex;
-  document.querySelectorAll("#day-slider-labels span").forEach(s => {
-    s.classList.toggle("active", s.dataset.date === entry.date);
-  });
-
-  // For each hour button (same 4 buttons regardless of which day is
-  // selected): show the local-time equivalent of that button's UTC hour
-  // on the *currently selected* date, and mark it "already happened" if
-  // that exact UTC instant is at or before the real current moment --
-  // this naturally covers all three cases: a past day (T-3..T-1, always
-  // true), a future day (T+1..T+3, always false), and -- the tricky one --
-  // today, where hours earlier than right now are recorded/analyzed and
-  // hours later today are still forecasts that may change before they
-  // arrive.
+function renderHourTabs(day) {
+  const hourContainer = document.getElementById("hour-tabs");
   const nowMs = Date.now();
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  document.querySelectorAll("#hour-tabs .day-tab").forEach(t => {
-    const h = Number(t.dataset.hour);
-    t.classList.toggle("active", h === entry.hour);
-    const slotDate = new Date(`${entry.date}T${String(h).padStart(2, "0")}:00:00Z`);
-    const localSpan = t.querySelector(".hour-local");
-    if (localSpan && !isNaN(slotDate.getTime())) {
-      const { timeStr, dayNote } = formatInZone(slotDate, browserTz, entry.date);
-      localSpan.textContent = timeStr + dayNote;
-    }
-    t.classList.toggle("is-actual", !isNaN(slotDate.getTime()) && slotDate.getTime() <= nowMs);
+  hourContainer.innerHTML = day.entries.map(e => {
+    const instant = new Date(e.timestamp + "Z");
+    const { timeStr } = formatInZone(instant, browserTz, day.date);
+    const isActual = instant.getTime() <= nowMs;
+    const active = currentEntry && e.timestamp === currentEntry.timestamp;
+    return `<button class="day-tab ${isActual ? "is-actual" : ""} ${active ? "active" : ""}" data-timestamp="${e.timestamp}">${timeStr}<span class="hour-local">${e.hour_label}</span></button>`;
+  }).join("");
+  hourContainer.querySelectorAll(".day-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      stopPlayback();
+      const entry = day.entries.find(e => e.timestamp === btn.dataset.timestamp);
+      if (entry) selectEntry(entry);
+    });
   });
-  buildTimezoneTable(entry);
+}
+
+async function selectEntry(entry) {
+  currentEntry = entry;
+  const loc = findDayAndSlot(entry);
+  if (loc) currentDayIdx = loc.dayIdx;
+  const day = days[currentDayIdx];
+
+  const slider = document.getElementById("day-slider");
+  if (slider) slider.value = currentDayIdx;
+  document.querySelectorAll("#day-slider-labels span").forEach((s, i) => {
+    s.classList.toggle("active", i === currentDayIdx);
+  });
+
+  renderHourTabs(day);
+  buildTimezoneTable(day);
 
   document.querySelector(".product-id-line span").textContent =
     `PRODUCT: NLS-LDI-CONUS-${entry.offset_days > 0 ? "FCST" : entry.offset_days < 0 ? "ARCH" : "DAILY"}-${entry.hour_label}`;
@@ -576,24 +616,54 @@ async function selectEntry(entry) {
   }
 }
 
-function findEntry(date, hour) {
-  return timelineIndex.find(e => e.date === date && e.hour === hour);
+// --- Play button: steps through every entry across all 7 local-day
+// buckets, in chronological order, looping continuously. Uses a
+// self-rescheduling setTimeout (not setInterval) so a slow fetch can't
+// cause overlapping ticks. ---
+function stopPlayback() {
+  playState.playing = false;
+  if (playState.timeoutId) clearTimeout(playState.timeoutId);
+  playState.timeoutId = null;
+  const btn = document.getElementById("play-btn");
+  if (btn) { btn.innerHTML = "&#9654; Play"; btn.classList.remove("playing"); }
+}
+
+async function playTick() {
+  if (!playState.playing) return;
+  const flat = days.flatMap(d => d.entries);
+  if (!flat.length) { stopPlayback(); return; }
+  let idx = currentEntry ? flat.findIndex(e => e.timestamp === currentEntry.timestamp) : -1;
+  idx = (idx + 1) % flat.length;
+  await selectEntry(flat[idx]);
+  if (!playState.playing) return;
+  const speedSelect = document.getElementById("play-speed");
+  const speed = Number(speedSelect && speedSelect.value) || 800;
+  playState.timeoutId = setTimeout(playTick, speed);
+}
+
+function startPlayback() {
+  playState.playing = true;
+  const btn = document.getElementById("play-btn");
+  if (btn) { btn.innerHTML = "&#9208; Pause"; btn.classList.add("playing"); }
+  playTick();
+}
+
+function setupPlayButton() {
+  const btn = document.getElementById("play-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    if (playState.playing) stopPlayback();
+    else startPlayback();
+  });
 }
 
 async function setupDayTabs() {
   const slider = document.getElementById("day-slider");
   const sliderLabels = document.getElementById("day-slider-labels");
-  const hourContainer = document.getElementById("hour-tabs");
   try {
     timelineIndex = await loadJSON("data/timeline_index.json");
-
-    // One entry per unique day, in chronological order (4 hour-entries share a day)
-    days = [];
-    for (const e of timelineIndex) {
-      if (!days.find(d => d.date === e.date)) {
-        days.push({ date: e.date, label: e.day_label, forecast: e.offset_days > 0 });
-      }
-    }
+    browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    days = buildLocalDayBuckets(timelineIndex, browserTz);
 
     slider.min = 0;
     slider.max = days.length - 1;
@@ -604,30 +674,24 @@ async function setupDayTabs() {
     ).join("");
 
     slider.addEventListener("input", () => {
+      stopPlayback();
       const day = days[Number(slider.value)];
-      if (!day) return;
-      const entry = findEntry(day.date, currentHour) || timelineIndex.find(e => e.date === day.date);
-      if (entry) selectEntry(entry);
+      if (!day || !day.entries.length) return;
+      // preserve the same "slot within the day" across the switch, e.g.
+      // staying on the 3rd of ~4 daily entries, clamped if the target
+      // day has fewer entries (DST-transition edge case)
+      const prevSlot = currentEntry ? (findDayAndSlot(currentEntry) || {}).slotIdx || 0 : 0;
+      const slotIdx = Math.min(prevSlot, day.entries.length - 1);
+      selectEntry(day.entries[slotIdx]);
     });
 
-    // Hour buttons are the same 4 slots every day
-    const hours = [...new Set(timelineIndex.map(e => e.hour))].sort((a, b) => a - b);
-    hourContainer.innerHTML = hours.map(h =>
-      `<button class="day-tab" data-hour="${h}">${String(h).padStart(2, "0")}Z<span class="hour-local"></span></button>`
-    ).join("");
-    hourContainer.querySelectorAll(".day-tab").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const entry = findEntry(currentDate, Number(btn.dataset.hour));
-        if (entry) selectEntry(entry);
-      });
-    });
-
-    const nowEntry = timelineIndex.find(e => e.is_now) || timelineIndex[Math.floor(timelineIndex.length / 2)];
-    if (nowEntry) await selectEntry(nowEntry);
+    const nowEntry = timelineIndex.find(e => e.is_now);
+    const startEntry = nowEntry || (days[3] && days[3].entries[0]) || timelineIndex[0];
+    if (startEntry) await selectEntry(startEntry);
   } catch (err) {
     console.error("Could not load timeline index, falling back to today.json", err);
-    document.querySelector(".day-slider-wrap").style.display = "none";
-    hourContainer.innerHTML = "";
+    document.querySelector(".timeline-controls").style.display = "none";
+    document.getElementById("hour-tabs").innerHTML = "";
     try {
       const dayData = await loadJSON("data/today.json");
       currentDayData = dayData;
@@ -644,9 +708,6 @@ async function setupDayTabs() {
   }
 }
 
-// Approximate straight-line distance between two lat/lon points, good
-// enough at the scale of "which county is nearest" (not for precise
-// navigation).
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -657,11 +718,6 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-// ZIP -> lat/lon via zippopotam.us (free, no API key). This is an external
-// dependency: if that service ever goes down or rate-limits, this lookup
-// breaks even though the rest of the site doesn't depend on any outside
-// service. An alternative that removes the dependency would be bundling a
-// static ZIP-centroid dataset instead of calling out to a live API.
 async function geocodeZip(zip) {
   const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
   if (!res.ok) throw new Error("ZIP code not found");
@@ -727,6 +783,7 @@ function setupZipLookup() {
   if (!form) return;
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    stopPlayback();
     const zip = document.getElementById("zip-input").value.trim();
     handleZipLookup(zip);
   });
@@ -748,6 +805,7 @@ async function init() {
   const svg = document.getElementById("state-svg");
   setupZoomPan(svg);
   await setupDayTabs();
+  setupPlayButton();
   setupMonthTabs();
   setupZipLookup();
   setupTzToggle();

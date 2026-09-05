@@ -9,12 +9,26 @@
   --mono: 'Roboto Mono', ui-monospace, monospace;
   --sans: 'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --c-hydrated: #4a6fa5;
-  --c-mild: #7fc6a4;
-  --c-advised: #b9c99a;
-  --c-risk: #e8dcc0;
-  --c-cocoa: #8b8fce;
-  --c-extreme: #6b46c1;
+  /* LDI palette, in scale order (0 -> 100). Rotated so only ONE end
+     (0, purple) is a deep/saturated color instead of two saturated
+     colors (blue+purple) bookending a pale middle -- see make_map.py's
+     LDI_COLORS comment for the full reasoning. Named by scale position,
+     not by category, since the category-to-color mapping is exactly
+     what moved. */
+  --c-scale-0: #6b46c1;  /* 0   - purple */
+  --c-scale-1: #4a6fa5;  /* ~20 - blue */
+  --c-scale-2: #7fc6a4;  /* ~40 - seafoam */
+  --c-scale-3: #b9c99a;  /* ~60 - sage */
+  --c-scale-4: #e8dcc0;  /* ~80 - ivory */
+  --c-scale-5: #8b8fce;  /* 100 - periwinkle */
+
+  /* Advisory banner colors are deliberately NOT tied to the LDI scale
+     above (advisories are a separate UI concept, not a map legend) --
+     fixed here so they don't silently shift if the scale palette
+     changes again later. */
+  --adv-default: #e8dcc0;
+  --adv-watch: #b9c99a;
+  --adv-warning: #8b8fce;
 }
 
 * { box-sizing: border-box; }
@@ -122,12 +136,59 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   color: var(--ink-soft);
 }
 
+/* --- Vertical legend (replaces the old horizontal gradient bar, which
+   forced long category labels to wrap awkwardly across two lines under
+   their tick marks). Six discrete blocks, one per LDI category, each
+   sized proportionally to its share of the 0-100 range (80-90 and
+   90-100 are half-height since they cover 10 points instead of 20).
+   Each block's label is pre-broken into range / word-group / word-group
+   so it reads in three short centered lines instead of wrapping
+   unpredictably. --- */
+.legend-vertical {
+  display: flex;
+  flex-direction: column-reverse; /* so DOM order 0->100 renders bottom-to-top */
+  width: 84px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.legend-block {
+  flex: 2 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px 4px;
+  color: #1a1a1a;
+  border-bottom: 1px solid rgba(255,255,255,0.5);
+}
+.legend-block:first-child { border-bottom: none; }
+.legend-block.legend-half { flex: 1 1 0; }
+.legend-range {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.legend-label {
+  font-size: 0.6rem;
+  line-height: 1.15;
+  margin-top: 2px;
+}
+@media (max-width: 800px) {
+  .legend-vertical { width: 100%; flex-direction: row-reverse; height: 64px; }
+  .legend-block { border-bottom: none; border-right: 1px solid rgba(255,255,255,0.5); }
+  .legend-block:first-child { border-right: none; }
+}
+
 /* --- Today panel --- */
 .today-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: auto 2fr 1fr;
   gap: 20px;
   margin-top: 14px;
+  align-items: stretch;
 }
 @media (max-width: 800px) {
   .today-grid { grid-template-columns: 1fr; }
@@ -203,32 +264,6 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 .summary-value { font-family: var(--mono); font-size: 2.6rem; font-weight: 700; margin: 4px 0; }
 .summary-category { font-size: 0.95rem; font-weight: 600; }
 
-.scale-caption { margin: 14px 0 4px; }
-.scale-caption-bar {
-  position: relative;
-  height: 14px;
-  border-radius: 3px;
-  background: linear-gradient(to right,
-    var(--c-hydrated) 0%, var(--c-mild) 20%, var(--c-advised) 40%,
-    var(--c-risk) 60%, var(--c-cocoa) 80%, var(--c-extreme) 100%);
-}
-.scale-caption-bar .tick {
-  position: absolute;
-  top: 100%;
-  transform: translateX(-50%);
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  color: var(--ink-soft);
-  margin-top: 2px;
-}
-.scale-caption-text {
-  margin: 22px 0 0;
-  font-size: 0.78rem;
-  color: var(--ink-soft);
-  line-height: 1.7;
-}
-.scale-caption-text strong { color: var(--ink); }
-
 .zip-lookup {
   background: #eef1ee;
   border: 1px solid var(--line);
@@ -303,18 +338,46 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 /* --- Advisories --- */
 .advisory-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .advisory-item {
-  border-left: 4px solid var(--c-risk);
+  border-left: 4px solid var(--adv-default);
   background: #fff8f0;
   padding: 10px 14px;
   font-size: 0.88rem;
   border-radius: 0 3px 3px 0;
 }
-.advisory-item.watch { border-left-color: var(--c-advised); background: #fffaf0; }
-.advisory-item.warning { border-left-color: var(--c-cocoa); background: #fdf2f2; }
+.advisory-item.watch { border-left-color: var(--adv-watch); background: #fffaf0; }
+.advisory-item.warning { border-left-color: var(--adv-warning); background: #fdf2f2; }
 .advisory-item .adv-title { font-weight: 700; font-family: var(--mono); font-size: 0.78rem; display: block; margin-bottom: 2px; color: var(--navy-dark); }
 
-/* --- Monthly normals --- */
-.day-slider-wrap { margin-bottom: 14px; }
+/* --- Timeline controls: day slider + hour tabs + play button --- */
+.timeline-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.play-btn {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.play-btn:hover { background: var(--navy-dark); }
+.play-btn.playing { background: #38686f; border-color: #38686f; }
+.play-speed {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  background: #eef1ee;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 5px 6px;
+}
+.day-slider-wrap { flex: 1; margin-bottom: 0; }
+
 .day-slider {
   width: 100%;
   margin: 0;
@@ -381,7 +444,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   margin-top: 2px;
   font-weight: 400;
 }
-.hour-tabs .day-tab.is-actual { border-bottom: 3px solid var(--c-mild); }
+.hour-tabs .day-tab.is-actual { border-bottom: 3px solid var(--c-scale-2); }
 .hour-tabs .day-tab.is-actual.active { border-bottom-color: #fff; }
 .hour-caption {
   font-size: 0.72rem;
@@ -394,7 +457,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  background: var(--c-mild);
+  background: var(--c-scale-2);
   vertical-align: middle;
   margin: 0 1px;
 }

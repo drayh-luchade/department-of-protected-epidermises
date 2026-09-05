@@ -45,41 +45,24 @@
       <span id="issued-line">ISSUED: --</span>
     </div>
     <h2 class="section-title">National Lotion Demand Index &mdash; 7-Day Analysis &amp; Outlook</h2>
-    <p class="section-sub">3 days of archived analysis, current conditions, and a 3-day model-based outlook &mdash; at 6-hour resolution (00Z/06Z/12Z/18Z).</p>
+    <p class="section-sub">3 days of archived analysis, current conditions, and a 3-day model-based outlook &mdash; at 6-hour resolution, shown in <strong>your local time zone</strong>.</p>
 
-    <div class="scale-caption">
-      <div class="scale-caption-bar">
-        <span class="tick" style="left:0%">0</span>
-        <span class="tick" style="left:20%">20</span>
-        <span class="tick" style="left:40%">40</span>
-        <span class="tick" style="left:60%">60</span>
-        <span class="tick" style="left:80%">80</span>
-        <span class="tick" style="left:90%">90</span>
-        <span class="tick" style="left:100%">100</span>
+    <div class="timeline-controls">
+      <button type="button" id="play-btn" class="play-btn">&#9654; Play</button>
+      <select id="play-speed" class="play-speed" aria-label="Playback speed">
+        <option value="1400">Slow</option>
+        <option value="800" selected>Normal</option>
+        <option value="400">Fast</option>
+      </select>
+      <div class="day-slider-wrap">
+        <input type="range" id="day-slider" class="day-slider" min="0" max="0" step="1" value="0" aria-label="Select day">
+        <div class="day-slider-labels" id="day-slider-labels"></div>
       </div>
-      <p class="scale-caption-text">
-        <strong>LDI Scale:</strong>
-        0&ndash;20 = Properly Hydrated &nbsp;&bull;&nbsp;
-        20&ndash;40 = Mild Moisturizing Recommended &nbsp;&bull;&nbsp;
-        40&ndash;60 = Lotion Advised &nbsp;&bull;&nbsp;
-        60&ndash;80 = Elbows at Risk &nbsp;&bull;&nbsp;
-        80&ndash;90 = Cocoa Butter Recommended &nbsp;&bull;&nbsp;
-        90&ndash;100 = Extreme Ashiness Warning
-      </p>
-    </div>
-
-    <div class="day-slider-wrap">
-      <input type="range" id="day-slider" class="day-slider" min="0" max="0" step="1" value="0" aria-label="Select day">
-      <div class="day-slider-labels" id="day-slider-labels"></div>
     </div>
     <div class="day-tabs hour-tabs" id="hour-tabs"></div>
-    <p class="hour-caption">Times shown in UTC (Z); your local equivalent is listed below each button
-      (a "prev day"/"next day" note appears if that hour actually falls on a different local calendar
-      date than the T-3&hellip;T+3 day selected above &mdash; since each day here is a UTC calendar date,
-      its first and/or last hour can spill into your local yesterday or tomorrow).
-      Hours marked with a <span class="hour-caption-swatch"></span> green underline have already occurred
-      and reflect recorded conditions &mdash; hours without it are still model forecasts for later today
-      and may change before they arrive.
+    <p class="hour-caption">Times shown in your local time zone (detected automatically). Hours marked with a
+      <span class="hour-caption-swatch"></span> green underline have already occurred and reflect recorded
+      conditions &mdash; hours without it are still model forecasts for later and may change before they arrive.
       <button type="button" id="tz-toggle" class="tz-toggle">Show all U.S. time zones &#9662;</button>
     </p>
     <div id="tz-table-wrap" class="tz-table-wrap hidden">
@@ -87,6 +70,33 @@
     </div>
 
     <div class="today-grid">
+      <div class="legend-vertical" aria-label="LDI color scale, low to high">
+        <div class="legend-block" style="background:#5A89A5">
+          <span class="legend-range">0&ndash;20</span>
+          <span class="legend-label">Properly<br>Hydrated</span>
+        </div>
+        <div class="legend-block" style="background:#7ABDA4">
+          <span class="legend-range">20&ndash;40</span>
+          <span class="legend-label">Mild Moisturizing<br>Recommended</span>
+        </div>
+        <div class="legend-block" style="background:#9CC89F">
+          <span class="legend-range">40&ndash;60</span>
+          <span class="legend-label">Lotion<br>Advised</span>
+        </div>
+        <div class="legend-block" style="background:#BECB9E">
+          <span class="legend-range">60&ndash;80</span>
+          <span class="legend-label">Elbows at<br>Risk</span>
+        </div>
+        <div class="legend-block legend-half" style="background:#D3D3AF">
+          <span class="legend-range">80&ndash;90</span>
+          <span class="legend-label">Cocoa Butter<br>Recommended</span>
+        </div>
+        <div class="legend-block legend-half" style="background:#E1D9BA">
+          <span class="legend-range">90&ndash;100</span>
+          <span class="legend-label">Extreme Ashiness<br>Warning</span>
+        </div>
+      </div>
+
       <div class="map-panel">
         <div class="map-controls">
           <p class="map-caption">Scroll/pinch to zoom, drag to pan, hover or tap for county details.</p>
