@@ -1,21 +1,27 @@
 """
 fetch_open_meteo.py
 
-True 6-hourly resolution (00/06/12/18 UTC), spanning past_days=3 ..
-forecast_days=5 (today + 4 days ahead) -- one day further out than the
-site actually displays.
+True 6-hourly resolution (00/06/12/18 UTC), spanning past_days=4 ..
+forecast_days=5 -- a one-day buffer past the nominal T-3..T+3 window,
+on BOTH ends, not just forecast (an earlier version only buffered the
+forecast side, which was wrong -- see below).
 
-Why the extra day: the site buckets timestamps into each VIEWER's local
-calendar day, not UTC's. Because 24 (hours/day) is evenly divisible by
-6 (our sampling interval), any 24-hour local-day window always contains
-exactly 4 of our synoptic-hour samples, regardless of the viewer's UTC
-offset -- so client-side local-day bucketing doesn't need denser data,
-just a wider UTC window to always have full coverage. The tightest case
-is a viewer far behind UTC (Hawaii, UTC-10): their local "T+3" day can
-extend up to 10 hours past UTC's T+3 18Z sample, reaching into what
-UTC calls T+4. One extra day of forecast covers that with room to
-spare; the archive side needs no equivalent padding (checked against
-the same worst-case offset).
+Why buffer at all: the site buckets timestamps into each VIEWER's local
+calendar day, but this fetch is anchored to the SERVER's UTC "today" at
+run time. Because 24 (hours/day) divides evenly by 6 (our sampling
+interval), any 24-hour local-day window always contains exactly 4 of
+our synoptic-hour samples -- but WHICH 4 depends on the viewer's offset,
+and the server's fixed UTC reference date doesn't always line up with
+the viewer's local reference date.
+
+Concretely: for any timezone BEHIND UTC (every US zone), the viewer's
+local calendar date is legitimately one day behind UTC's for several
+hours out of every 24 -- not staleness, just how UTC offsets work (UTC
+crosses midnight before a behind-UTC zone does). So a US viewer's local
+T-3 can correspond to UTC dates as old as the server's T-4, and their
+local T+3 can reach into the server's T+4. A timezone AHEAD of UTC has
+the same need but mirrored. Buffering one extra day on BOTH ends covers
+every real-world offset in either direction.
 
 Docs: https://open-meteo.com/en/docs
   hourly=temperature_2m,relative_humidity_2m,dew_point_2m,wind_speed_10m,uv_index
@@ -29,9 +35,20 @@ import requests
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 MAX_WORKERS = 8
-PAST_DAYS = 3
-FORECAST_DAYS = 5  # today + 4 days ahead (1 extra day as a local-timezone buffer)
+PAST_DAYS = 4    # 3 nominal archive days + 1 buffer day (see below)
+FORECAST_DAYS = 5  # today + 3 nominal forecast days + 1 buffer day
 SYNOPTIC_HOURS = (0, 6, 12, 18)  # matches the site's 6-hour cron cadence
+
+# Why both sides need a buffer day, not just forecast: the site buckets
+# by the VIEWER's local calendar day, but this fetch is anchored to the
+# SERVER's UTC "today" at run time. For any timezone behind UTC (all US
+# zones), the viewer's local calendar date is legitimately ONE DAY BEHIND
+# UTC's for several hours out of every 24 -- not staleness, just how UTC
+# offsets work (UTC crosses midnight before a behind-UTC zone does). So
+# the viewer's local T-3 can correspond to UTC dates as old as the
+# server's T-4. Ahead-of-UTC zones have the mirror-image need on the
+# forecast side. Buffering both ends by one day covers every real-world
+# offset in either direction.
 
 HOURLY_PARAMS = [
     "temperature_2m",
@@ -85,7 +102,7 @@ def fetch_region_timeseries(bbox: dict, spacing: float) -> dict:
     """
     Returns {timestamp_str: {"lats":..., "lons":..., "date": timestamp_str,
     "vars": {...}}} for each synoptic-hour timestamp across the fetch
-    window (7 nominal days + 1 buffer day = 32 timestamps), for one region.
+    window (7 nominal days + 1 buffer day on each end = 36 timestamps), for one region.
     """
     lats = np.arange(bbox["lat_min"], bbox["lat_max"] + 0.01, spacing)
     lons = np.arange(bbox["lon_min"], bbox["lon_max"] + 0.01, spacing)

@@ -4,9 +4,9 @@ demo_data.py
 Synthetic fallback generator, matching the schema of
 fetch_open_meteo.fetch_region_timeseries(): keyed by timestamp string
 ("YYYY-MM-DDTHH:00", UTC, no offset), one grid per synoptic hour
-(00/06/12/18) across past_days=3..forecast_days=+4 -- the same window
-fetch_open_meteo.py now uses (7 nominal days + 1 buffer day for
-local-timezone bucketing on the client -- see that module's docstring).
+(00/06/12/18) across past_days=4..forecast_days=+4 -- the same window
+fetch_open_meteo.py now uses (7 nominal days + 1 buffer day on EACH end
+for local-timezone bucketing on the client -- see that module's docstring).
 
 Parameterized by:
   - bbox: so it can generate CONUS, Alaska, or Hawaii (see regions.py)
@@ -93,11 +93,11 @@ def make_demo_grid(bbox: dict, spacing: float, timestamp: str | None = None,
 
 def make_demo_timeseries(bbox: dict, spacing: float, seed: int = 0) -> dict:
     """Matches fetch_open_meteo.fetch_region_timeseries()'s return shape:
-    {timestamp_str: grid_dict} for T-3..T+4 (the extra day is a
-    local-timezone buffer, see fetch_open_meteo.py's docstring)."""
+    {timestamp_str: grid_dict} for T-4..T+4 (one buffer day on each end,
+    see fetch_open_meteo.py's docstring for why both sides need one)."""
     today = dt.date.today()
     out = {}
-    for offset in range(-3, 5):
+    for offset in range(-4, 5):
         d = today + dt.timedelta(days=offset)
         for hour in SYNOPTIC_HOURS:
             timestamp = f"{d.isoformat()}T{hour:02d}:00"
