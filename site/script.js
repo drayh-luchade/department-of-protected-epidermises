@@ -84,22 +84,29 @@ const US_TIME_ZONES = [
 // by the difference, repeat until it converges (2 passes is enough for
 // every real-world zone, including half/quarter-hour-offset zones).
 // ---------------------------------------------------------------------
+function zonedOffsetMs(ms, tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(ms));
+  const get = (type) => Number(parts.find(p => p.type === type).value);
+  const asUtcMs = Date.UTC(get("year"), get("month") - 1, get("day"),
+                            get("hour"), get("minute"), get("second"));
+  return asUtcMs - ms;
+}
+
 function zonedTimeToUtc(dateStr, hour, minute, tz) {
-  let guess = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`);
-  for (let i = 0; i < 2; i++) {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz, hourCycle: "h23",
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-    }).formatToParts(guess);
-    const get = (type) => Number(parts.find(p => p.type === type).value);
-    const shownAsUtcMs = Date.UTC(get("year"), get("month") - 1, get("day"),
-                                   get("hour"), get("minute"), get("second"));
-    const diff = shownAsUtcMs - guess.getTime();
-    if (diff === 0) break;
-    guess = new Date(guess.getTime() - diff);
-  }
-  return guess;
+  const naiveMs = Date.parse(`${dateStr}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`);
+  const shift1 = zonedOffsetMs(naiveMs, tz);
+  const corrected = naiveMs - shift1;
+  // Re-check the offset AT the corrected instant -- only re-correct if it
+  // actually differs (a real DST-boundary case), never unconditionally
+  // re-apply shift1 again. Applying the same correction twice was the
+  // bug: it overshot the true midnight boundary by a full offset-width
+  // (e.g. landed on 08:00Z for EDT midnight instead of the correct 04:00Z).
+  const shift2 = zonedOffsetMs(corrected, tz);
+  return new Date(shift2 === shift1 ? corrected : naiveMs - shift2);
 }
 
 function getLocalDateStr(date, tz) {

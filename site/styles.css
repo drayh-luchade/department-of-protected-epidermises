@@ -318,7 +318,13 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 }
 
 .top-states-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
-#top-states-list { margin: 0; padding-left: 20px; font-size: 0.85rem; }
+#top-states-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  max-height: 210px;
+  overflow-y: auto;
+}
 #top-states-list li { margin-bottom: 3px; }
 
 /* --- AFD text product: the signature element --- */
