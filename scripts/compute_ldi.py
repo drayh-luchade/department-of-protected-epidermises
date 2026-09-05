@@ -2,17 +2,6 @@
 compute_ldi.py
 
 Converts raw meteorological grids into the Lotion Demand Index (LDI).
-
-Each input variable is normalized to 0-100 "dryness contribution" where
-100 = maximally lotion-demanding, then combined with the weights from
-the project plan:
-
-    Relative Humidity  40%  (inverted: low RH -> high dryness)
-    Dew Point          20%  (inverted: low dew point -> high dryness)
-    Wind               15%  (high wind -> high dryness, evaporative)
-    UV                 10%  (high UV -> high dryness, sun damage)
-    Elevation          10%  (high elevation -> thinner/drier air)
-    Temperature         5%  (extreme heat -> mild positive contribution)
 """
 
 import numpy as np
@@ -37,9 +26,6 @@ CATEGORIES = [
 
 
 def _normalize(arr: np.ndarray, lo: float, hi: float, invert: bool = False) -> np.ndarray:
-    """Min-max normalize to 0-100 against fixed physically-meaningful
-    bounds (not the sample min/max) so that scores are comparable across
-    days -- a 90 in July should mean the same thing as a 90 in January."""
     scaled = (arr - lo) / (hi - lo)
     scaled = np.clip(scaled, 0, 1) * 100
     return 100 - scaled if invert else scaled
@@ -81,12 +67,3 @@ def categorize(score: float) -> str:
 
 def national_average(ldi_result: dict) -> float:
     return float(np.nanmean(ldi_result["ldi"]))
-
-
-if __name__ == "__main__":
-    from demo_data import make_demo_grid
-    grid = make_demo_grid()
-    result = compute_ldi(grid)
-    avg = national_average(result)
-    print(f"National average LDI: {avg:.1f} ({categorize(avg)})")
-    print(f"Max: {result['ldi'].max():.1f}, Min: {result['ldi'].min():.1f}")

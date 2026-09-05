@@ -1,16 +1,9 @@
 """
 counties.py
 
-County-level detail for the LDI map. We do NOT fetch weather data per
-county (3,200+ live API calls per run is excessive and unnecessary) --
-instead we interpolate the same physically-modeled grid used for the
-state-level map onto each county's centroid. This is honest about what
-it is: the underlying weather model resolution is still ~3 degrees, so
-county-level display shows the same smooth spatial pattern at finer
-administrative granularity, not finer *physical* resolution. That's
-still meaningfully more useful than 51 state polygons -- Texas or
-California hidden behind one statewide number is a much bigger loss of
-information than the county interpolation is.
+County-level detail for the LDI map, interpolated from the same
+regional-model grid used for the state-level map (see compute_ldi.py) --
+not independently fetched per county.
 """
 
 import json
@@ -31,8 +24,6 @@ def load_counties(geojson_path: str):
             continue
         geom = feat["geometry"]
         polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
-        # centroid: mean of vertices of the largest ring (fast, good enough
-        # for sampling a coarse climate grid -- not for cartographic centroid accuracy)
         biggest_ring = max((ring for poly in polys for ring in poly), key=len)
         pts = np.array(biggest_ring)
         counties.append({
@@ -41,7 +32,7 @@ def load_counties(geojson_path: str):
             "state_name": STATE_FIPS[state_fips],
             "name": props.get("NAME", "Unknown"),
             "polys": polys,
-            "centroid": (float(pts[:, 1].mean()), float(pts[:, 0].mean())),  # (lat, lon)
+            "centroid": (float(pts[:, 1].mean()), float(pts[:, 0].mean())),
         })
     return counties
 
@@ -63,9 +54,6 @@ def interpolate_field_at_counties(lats, lons, field: np.ndarray, counties: list)
 
 
 def interpolate_ldi_at_counties(ldi_result: dict, counties: list) -> dict:
-    """Returns {fips: value} using linear interpolation of the LDI grid,
-    falling back to nearest-neighbor for centroids outside the grid's
-    convex hull (common near coastlines/edges)."""
     lats, lons, ldi = ldi_result["lats"], ldi_result["lons"], ldi_result["ldi"]
     values = interpolate_field_at_counties(lats, lons, ldi, counties)
     return {c["fips"]: float(v) for c, v in zip(counties, values)}

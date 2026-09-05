@@ -16,7 +16,7 @@ STATE_FIPS = {
     "55": "Wisconsin", "56": "Wyoming", "72": "Puerto Rico",
 }
 
-EXCLUDE_FIPS = {"72"}  # Puerto Rico -- not currently modeled as its own region
+EXCLUDE_FIPS = {"72"}
 REGION_FIPS = {
     "alaska": {"02"},
     "hawaii": {"15"},

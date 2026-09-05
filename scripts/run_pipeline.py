@@ -1,40 +1,33 @@
 """
 run_pipeline.py
 
-    python run_pipeline.py timeline   -> the main product: renders every
-                                          synoptic-hour timestamp (00/06/12/18
-                                          UTC) from T-3 to T+3 -- 28 steps
-                                          total -- for all 3 regions. Writes
+    python run_pipeline.py timeline   -> renders every synoptic-hour
+                                          timestamp (00/06/12/18 UTC) across
+                                          the fetch window (T-3..T+4, 32
+                                          timestamps -- see
+                                          fetch_open_meteo.py's docstring for
+                                          why there's a buffer day) for all
+                                          3 regions. Writes
                                           site/assets/maps/timeline/<date>_<hh>z.png,
                                           site/data/timeline/<date>_<hh>z.json, and
                                           site/data/timeline_index.json. Also
                                           copies whichever timestamp is
                                           closest to "now" to
-                                          site/assets/maps/today.png / site/data/today.json
-                                          for backward compatibility. Prunes
-                                          any leftover timeline files whose
-                                          date/hour falls outside the current
-                                          window -- this used to be missing
-                                          entirely, which is why old dates and
-                                          a legacy bare-date (pre-hourly)
-                                          filename format both accumulated
-                                          indefinitely in git history.
+                                          site/assets/maps/today.png / site/data/today.json.
+                                          Prunes any leftover timeline files
+                                          whose date/hour falls outside the
+                                          current window.
     python run_pipeline.py monthly    -> the 12 site/assets/maps/monthly/*.png
                                           climate-normal products (unchanged
                                           single-day-per-month demo data).
 
-Live path: fetch_open_meteo.py, tried first for each region -- now hourly,
-sampled at the 4 synoptic hours (see that module's docstring for why).
-Falls back to demo_data.py (same timestamp-keyed schema, with a diurnal
-cycle) if the live fetch fails for any reason.
+Live path: fetch_open_meteo.py, tried first for each region. Falls back
+to demo_data.py (same timestamp-keyed schema, with a diurnal cycle) if
+the live fetch fails for any reason.
 
-NOTE: this writes directly into site/, which is the actual GitHub Pages
-deployment root -- there is deliberately no separate root-level assets/ or
-data/ anymore. Previously the pipeline wrote to root assets/data/ and a
-workflow step copied everything into site/, which meant every generated
-file was committed twice (see repo cleanup notes in README). Writing
-straight into site/ removes that duplication at the source instead of
-copying around it.
+NOTE: this writes directly into site/, the actual GitHub Pages
+deployment root -- there is deliberately no separate root-level assets/
+or data/.
 """
 
 import calendar
@@ -70,7 +63,6 @@ def get_region_timeseries(region_key: str) -> dict:
 
 
 def _parse_timestamp(ts: str):
-    """'2026-07-15T00:00' -> (date_str, hour_int)"""
     date_part, time_part = ts.split("T")
     return date_part, int(time_part[:2])
 
@@ -80,11 +72,6 @@ def _filename_base(date_str: str, hour: int) -> str:
 
 
 def _prune_stale_timeline_files(valid_bases: set):
-    """Delete any timeline PNG/JSON whose base name isn't part of the
-    current T-3..T+3 window. This also incidentally removes the legacy
-    bare-date files (e.g. '2026-07-15.png') left over from before the
-    hourly format existed, since their base never matches a current
-    '<date>_<hh>z' entry."""
     for directory in (TIMELINE_MAPS_DIR, TIMELINE_DATA_DIR):
         if not os.path.isdir(directory):
             continue
@@ -166,8 +153,7 @@ def run_timeline():
     valid_bases = {e["file_base"] for e in index_entries}
     _prune_stale_timeline_files(valid_bases)
 
-    print("Timeline complete:", len(index_entries), "timestamps "
-          f"({len(index_entries)//4} days x 4 synoptic hours).")
+    print("Timeline complete:", len(index_entries), "timestamps.")
 
 
 def run_monthly():
@@ -200,7 +186,7 @@ if __name__ == "__main__":
         run_timeline()
     elif mode == "monthly":
         run_monthly()
-    elif mode == "today":  # kept as an alias for backward compatibility
+    elif mode == "today":
         run_timeline()
     else:
         print(f"Unknown mode: {mode}. Use 'timeline' or 'monthly'.")

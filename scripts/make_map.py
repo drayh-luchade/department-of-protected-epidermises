@@ -2,10 +2,8 @@
 make_map.py
 
 Renders the LDI map as a PNG in NWS/NOAA product style: a county-level
-choropleth (see counties.py for why county-level display doesn't imply
-county-level weather data) with state outlines on top, CONUS as the
-main map, and Alaska + Hawaii as inset boxes placed side by side below
-the main map -- NOT overlapping it or the footer text.
+choropleth with state outlines on top, CONUS as the main map, and
+Alaska + Hawaii as inset boxes placed side by side below it.
 """
 
 import datetime as dt
@@ -22,16 +20,13 @@ from compute_ldi import categorize, national_average
 from regions import REGIONS
 from counties import load_counties, counties_for_region, interpolate_ldi_at_counties, interpolate_field_at_counties
 
-# Blue (hydrated) -> Seafoam -> Light Sage -> Warm Ivory -> Periwinkle ->
-# Purple (extreme ashiness warning). Leans into the lotion-report joke:
-# reads like a mood-ring / moisturization-intensity scale rather than a
-# standard meteorological ramp.
-LDI_COLORS = ["#4A6FA5", "#7FC6A4", "#B9C99A", "#E8DCC0", "#8B8FCE", "#6B46C1"]
+# Purple and periwinkle removed entirely -- just blue -> seafoam -> sage
+# -> beige, stretched across the full 0-100 range instead of confined to
+# 40-100. Simplest fix for "purple reads confusing/out of place at the
+# low end": don't use it at all.
+LDI_COLORS = ["#4A6FA5", "#7FC6A4", "#B9C99A", "#E8DCC0"]
 LDI_BOUNDS = [0, 20, 40, 60, 80, 90, 100]
 
-# Small padding beyond each region's data bbox so state/coast lines don't
-# look clipped flush against the plot edge (this was read as "the map
-# doesn't reach the highest latitude" -- it did, it just had zero margin).
 REGION_PAD_DEG = {"conus": 0.5, "alaska": 0.6, "hawaii": 0.3}
 
 
@@ -84,12 +79,6 @@ def _render_region(ax, ldi_result: dict, states_geojson: str, all_counties: list
 
     ax.set_xlim(bbox["lon_min"] - pad, bbox["lon_max"] + pad)
     ax.set_ylim(bbox["lat_min"] - pad, bbox["lat_max"] + pad)
-    # True aspect ratio: at higher latitudes, a degree of longitude covers
-    # less physical distance than a degree of latitude (lines of longitude
-    # converge toward the poles). aspect=1/cos(mean_lat) compensates for
-    # that so shapes aren't stretched -- this is what was missing before
-    # (aspect="auto" for insets just force-stretched Alaska to fill
-    # whatever box it was given, which is what squashed it).
     mean_lat = (bbox["lat_min"] + bbox["lat_max"]) / 2
     aspect = 1 / np.cos(np.radians(mean_lat))
     ax.set_aspect(aspect, adjustable="box")
@@ -112,8 +101,6 @@ def render_map(ldi_results: dict, states_geojson: str, counties_geojson: str, ou
 
     fig = plt.figure(figsize=(11, 8.2), facecolor="#f5f6f3")
 
-    # Main CONUS map takes the upper ~56% of the figure; insets and footer
-    # text live in the reserved band below it, side by side, with margin.
     main_ax = fig.add_axes([0.04, 0.33, 0.78, 0.55])
     _render_region(main_ax, conus_result, states_geojson, all_counties, "conus", cmap, norm)
 
@@ -275,7 +262,8 @@ if __name__ == "__main__":
         result["raw_vars"] = grid["vars"]
         results[key] = result
 
-    render_map(results, "../assets/us-states.json", "../assets/us-counties.json", "../assets/maps/today.png")
-    export_json(results, "../data/today.json", states_geojson="../assets/us-states.json",
-                counties_geojson="../assets/us-counties.json")
-    print("Wrote ../assets/maps/today.png and ../data/today.json (county-level, AK+HI side by side)")
+    render_map(results, "../site/assets/us-states.json", "../site/assets/us-counties.json",
+               "../site/assets/maps/today.png")
+    export_json(results, "../site/data/today.json", states_geojson="../site/assets/us-states.json",
+                counties_geojson="../site/assets/us-counties.json")
+    print("Wrote today.png and today.json with rotated color palette")
