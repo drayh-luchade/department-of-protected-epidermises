@@ -77,7 +77,7 @@ jobs:
     # hours. Trigger manually until a real climate-normals data source
     # (PRISM) replaces the demo path -- see README "Going live" section.
     needs: update-data
-    if: github.event_name == 'workflow_dispatch'
+    #if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
